@@ -154,13 +154,17 @@ function PerguntaRapidaButton({
   );
 }
 
-function ApiKeyForm({ onSaved }: { onSaved: () => void }) {
+function ApiKeyDialog({ onSaved }: { onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
   const [rascunho, setRascunho] = useState("");
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   useEffect(() => {
-    setRascunho(getStoredApiKey() ?? "");
-  }, []);
+    if (open) {
+      setRascunho(getStoredApiKey() ?? "");
+      setMensagem(null);
+    }
+  }, [open]);
 
   const handleSalvar = useEffectEvent((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,6 +177,7 @@ function ApiKeyForm({ onSaved }: { onSaved: () => void }) {
     setStoredApiKey(valor);
     setMensagem("Chave salva neste navegador.");
     onSaved();
+    setOpen(false);
   });
 
   const handleRemover = useEffectEvent(() => {
@@ -189,51 +194,67 @@ function ApiKeyForm({ onSaved }: { onSaved: () => void }) {
     }
   );
 
+  const handleOpenChange = useEffectEvent((proximo: boolean) => {
+    setOpen(proximo);
+  });
+
   return (
-    <form className="flex flex-col gap-2" onSubmit={handleSalvar}>
-      <div className="flex items-center gap-1.5">
-        <KeyRoundIcon className="size-3.5 text-muted-foreground" />
-        <Label
-          className="font-medium text-muted-foreground text-xs"
-          htmlFor="anthropic-api-key"
-        >
-          Chave da API Anthropic
-        </Label>
-      </div>
-      <Input
-        autoComplete="off"
-        className="bg-background"
-        id="anthropic-api-key"
-        onChange={handleRascunhoChange}
-        placeholder="sk-ant-..."
-        spellCheck={false}
-        type="password"
-        value={rascunho}
-      />
-      <div className="flex gap-2">
-        <Button className="flex-1" type="submit">
-          Salvar chave
-        </Button>
-        <Button onClick={handleRemover} type="button" variant="outline">
-          Remover
-        </Button>
-      </div>
-      {mensagem ? (
-        <p className="text-muted-foreground text-xs">{mensagem}</p>
-      ) : (
-        <p className="text-muted-foreground text-xs">
-          Salva só neste navegador.{" "}
-          <a
-            className="underline underline-offset-2"
-            href="https://console.anthropic.com/"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Obter chave
-          </a>
-        </p>
-      )}
-    </form>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger
+        render={<Button className="justify-start" variant="ghost" />}
+      >
+        <KeyRoundIcon data-icon="inline-start" />
+        Configurar chave da API
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Chave da API Anthropic</DialogTitle>
+          <DialogDescription>
+            Cole sua própria chave para ativar respostas com IA. Ela fica salva
+            apenas neste navegador (localStorage) e é enviada direto à
+            Anthropic.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form className="flex flex-col gap-3" onSubmit={handleSalvar}>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="anthropic-api-key">Chave da API</Label>
+            <Input
+              autoComplete="off"
+              id="anthropic-api-key"
+              onChange={handleRascunhoChange}
+              placeholder="sk-ant-..."
+              spellCheck={false}
+              type="password"
+              value={rascunho}
+            />
+            {mensagem ? (
+              <p className="text-muted-foreground text-xs">{mensagem}</p>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                Obtenha a chave em{" "}
+                <a
+                  className="underline underline-offset-2"
+                  href="https://console.anthropic.com/"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  console.anthropic.com
+                </a>
+                .
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <Button onClick={handleRemover} type="button" variant="outline">
+              Remover chave
+            </Button>
+            <Button type="submit">Salvar chave</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -270,8 +291,6 @@ function SidebarContent({
         </Badge>
       </div>
 
-      <ApiKeyForm onSaved={onChaveAlterada} />
-
       <div className="flex flex-col gap-2">
         <p className="font-medium text-muted-foreground text-xs">Categorias</p>
         <div className="flex flex-wrap gap-2">
@@ -300,27 +319,31 @@ function SidebarContent({
         </ScrollArea>
       </div>
 
-      <Dialog>
-        <DialogTrigger
-          render={<Button className="justify-start" variant="ghost" />}
-        >
-          <InfoIcon data-icon="inline-start" />
-          Sobre este projeto
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Sobre o Copiloto Northa</DialogTitle>
-            <DialogDescription>
-              Aplicação acadêmica da disciplina IA Generativa Aplicada ao
-              Desenvolvimento (UniFECAF). Demonstra um assistente corporativo
-              que consulta uma base de conhecimento interna (RH, TI, Operações e
-              Compliance) e responde em linguagem natural com suporte da API
-              Anthropic. Cada usuário pode colar a própria chave na barra
-              lateral. A empresa Northa Soluções Logísticas é fictícia.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
+      <div className="flex flex-col gap-1">
+        <ApiKeyDialog onSaved={onChaveAlterada} />
+
+        <Dialog>
+          <DialogTrigger
+            render={<Button className="justify-start" variant="ghost" />}
+          >
+            <InfoIcon data-icon="inline-start" />
+            Sobre este projeto
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Sobre o Copiloto Northa</DialogTitle>
+              <DialogDescription>
+                Aplicação acadêmica da disciplina IA Generativa Aplicada ao
+                Desenvolvimento (UniFECAF). Demonstra um assistente corporativo
+                que consulta uma base de conhecimento interna (RH, TI, Operações
+                e Compliance) e responde em linguagem natural com suporte da API
+                Anthropic. Use o botão acima para colar sua chave da API. A
+                empresa Northa Soluções Logísticas é fictícia.
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }
@@ -486,8 +509,9 @@ export function CopilotoNortha() {
                       <EmptyTitle>Como posso ajudar?</EmptyTitle>
                       <EmptyDescription>
                         Pergunte sobre políticas de RH, TI, Operações ou
-                        Compliance da Northa. Na barra lateral, cole sua chave
-                        Anthropic para respostas com IA — ou use o modo offline.
+                        Compliance da Northa. Na barra lateral, use{" "}
+                        <strong>Configurar chave da API</strong> para colar sua
+                        chave Anthropic — ou use o modo offline.
                       </EmptyDescription>
                     </EmptyHeader>
                   </Empty>
