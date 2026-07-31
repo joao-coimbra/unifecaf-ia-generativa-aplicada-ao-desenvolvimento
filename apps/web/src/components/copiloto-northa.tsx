@@ -24,6 +24,12 @@ import {
   EmptyTitle,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/empty";
 import { Input } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/input-group";
 import { Label } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/label";
 import {
   Message,
@@ -590,27 +596,33 @@ export function CopilotoNortha() {
         </MessageScrollerProvider>
 
         <footer className="border-border/80 border-t bg-background/90 p-4 backdrop-blur">
-          <form
-            className="mx-auto flex w-full max-w-3xl items-center gap-2"
-            onSubmit={handleSubmit}
-          >
-            <Input
-              aria-label="Pergunta para o Copiloto Northa"
-              className="h-10 flex-1 bg-background text-sm"
-              disabled={digitando}
-              onChange={handleEntradaChange}
-              placeholder="Pergunte algo sobre as políticas da Northa..."
-              ref={inputRef}
-              value={entrada}
-            />
-            <Button
-              disabled={digitando || !entrada.trim()}
-              size="lg"
-              type="submit"
-            >
-              {digitando ? <Spinner /> : <SendIcon data-icon="inline-start" />}
-              Enviar
-            </Button>
+          <form className="mx-auto w-full max-w-3xl" onSubmit={handleSubmit}>
+            <InputGroup className="h-11">
+              <InputGroupInput
+                aria-label="Pergunta para o Copiloto Northa"
+                className="text-sm"
+                disabled={digitando}
+                onChange={handleEntradaChange}
+                placeholder="Pergunte algo sobre as políticas da Northa..."
+                ref={inputRef}
+                value={entrada}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  disabled={digitando || !entrada.trim()}
+                  size="sm"
+                  type="submit"
+                  variant="default"
+                >
+                  {digitando ? (
+                    <Spinner />
+                  ) : (
+                    <SendIcon data-icon="inline-start" />
+                  )}
+                  Enviar
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
           </form>
         </footer>
       </div>
