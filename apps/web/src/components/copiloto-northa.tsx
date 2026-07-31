@@ -10,8 +10,10 @@ import {
 import { Button } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -24,6 +26,7 @@ import {
   EmptyTitle,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/empty";
 import { Input } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/input";
+import { Label } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/label";
 import {
   Message,
   MessageAvatar,
@@ -50,6 +53,7 @@ import { Spinner } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/
 import {
   BotIcon,
   InfoIcon,
+  KeyRoundIcon,
   MenuIcon,
   SendIcon,
   UserIcon,
@@ -64,7 +68,14 @@ import {
   useState,
 } from "react";
 
-import { gerarResposta, isIaConfigurada } from "../lib/ai";
+import { gerarResposta } from "../lib/ai";
+import {
+  type ApiKeySource,
+  clearStoredApiKey,
+  getApiKeySource,
+  getStoredApiKey,
+  setStoredApiKey,
+} from "../lib/api-key";
 import {
   type Categoria,
   categorias,
@@ -102,6 +113,26 @@ function criarId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function rotuloFonte(fonte: ApiKeySource): string {
+  if (fonte === "local") {
+    return "IA conectada (sua chave)";
+  }
+  if (fonte === "env") {
+    return "IA conectada (ambiente)";
+  }
+  return "Modo offline";
+}
+
+function rotuloBadge(fonte: ApiKeySource): string {
+  if (fonte === "local") {
+    return "Sua chave ativa";
+  }
+  if (fonte === "env") {
+    return "Anthropic ativa";
+  }
+  return "Sem chave de API";
+}
+
 function PerguntaRapidaButton({
   pergunta,
   onSelect,
@@ -124,13 +155,124 @@ function PerguntaRapidaButton({
   );
 }
 
+function ApiKeyDialog({
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [rascunho, setRascunho] = useState("");
+  const [mensagem, setMensagem] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setRascunho(getStoredApiKey() ?? "");
+      setMensagem(null);
+    }
+  }, [open]);
+
+  const handleRascunhoChange = useEffectEvent(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setRascunho(event.target.value);
+      setMensagem(null);
+    }
+  );
+
+  const handleSalvar = useEffectEvent(() => {
+    const valor = rascunho.trim();
+    if (!valor) {
+      setMensagem("Cole uma chave válida da Anthropic para salvar.");
+      return;
+    }
+
+    setStoredApiKey(valor);
+    setMensagem("Chave salva neste navegador.");
+    onSaved();
+    onOpenChange(false);
+  });
+
+  const handleRemover = useEffectEvent(() => {
+    clearStoredApiKey();
+    setRascunho("");
+    setMensagem(
+      "Chave removida. O app volta ao modo offline (ou à chave de ambiente, se houver)."
+    );
+    onSaved();
+  });
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Chave da API Anthropic</DialogTitle>
+          <DialogDescription>
+            Cole sua própria chave para ativar respostas com IA. Ela fica salva
+            apenas neste navegador (localStorage) e é enviada direto à Anthropic
+            — não passa por nenhum servidor nosso.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="anthropic-api-key">Chave da API</Label>
+          <Input
+            autoComplete="off"
+            id="anthropic-api-key"
+            onChange={handleRascunhoChange}
+            placeholder="sk-ant-..."
+            spellCheck={false}
+            type="password"
+            value={rascunho}
+          />
+          {mensagem ? (
+            <p className="text-muted-foreground text-xs">{mensagem}</p>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              Obtenha a chave em{" "}
+              <a
+                className="underline underline-offset-2"
+                href="https://console.anthropic.com/"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                console.anthropic.com
+              </a>
+              .
+            </p>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button onClick={handleRemover} type="button" variant="outline">
+            Remover chave
+          </Button>
+          <div className="flex gap-2">
+            <DialogClose render={<Button type="button" variant="ghost" />}>
+              Cancelar
+            </DialogClose>
+            <Button onClick={handleSalvar} type="button">
+              Salvar
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SidebarContent({
-  iaAtiva,
+  fonteChave,
+  onAbrirApiKey,
   onPerguntaRapida,
 }: {
-  iaAtiva: boolean;
+  fonteChave: ApiKeySource;
+  onAbrirApiKey: () => void;
   onPerguntaRapida: (pergunta: string) => void;
 }) {
+  const iaAtiva = fonteChave !== "none";
+
   return (
     <div className="flex h-full flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -149,8 +291,17 @@ function SidebarContent({
         </div>
 
         <Badge variant={iaAtiva ? "default" : "outline"}>
-          {iaAtiva ? "IA conectada" : "Modo offline"}
+          {rotuloFonte(fonteChave)}
         </Badge>
+
+        <Button
+          className="justify-start"
+          onClick={onAbrirApiKey}
+          variant="outline"
+        >
+          <KeyRoundIcon data-icon="inline-start" />
+          Configurar chave da API
+        </Button>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -197,7 +348,8 @@ function SidebarContent({
               que consulta uma base de conhecimento interna (RH, TI, Operações e
               Compliance) e responde em linguagem natural com suporte da API
               Anthropic. A empresa Northa Soluções Logísticas é fictícia e
-              criada apenas para fins didáticos.
+              criada apenas para fins didáticos. Cada usuário pode inserir a
+              própria chave da API pelo menu lateral.
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
@@ -231,7 +383,8 @@ export function CopilotoNortha() {
   const [entrada, setEntrada] = useState("");
   const [digitando, setDigitando] = useState(false);
   const [sidebarAberta, setSidebarAberta] = useState(false);
-  const iaAtiva = isIaConfigurada();
+  const [apiKeyAberta, setApiKeyAberta] = useState(false);
+  const [fonteChave, setFonteChave] = useState<ApiKeySource>("none");
   const inputRef = useRef<HTMLInputElement>(null);
   const digitandoRef = useRef(digitando);
   const entradaRef = useRef(entrada);
@@ -240,10 +393,23 @@ export function CopilotoNortha() {
   entradaRef.current = entrada;
 
   useEffect(() => {
+    setFonteChave(getApiKeySource());
+  }, []);
+
+  useEffect(() => {
     if (!digitando) {
       inputRef.current?.focus();
     }
   }, [digitando]);
+
+  const sincronizarFonteChave = useEffectEvent(() => {
+    setFonteChave(getApiKeySource());
+  });
+
+  const abrirApiKey = useEffectEvent(() => {
+    setApiKeyAberta(true);
+    setSidebarAberta(false);
+  });
 
   const enviarPergunta = useEffectEvent(async (perguntaBruta: string) => {
     const pergunta = perguntaBruta.trim();
@@ -291,11 +457,14 @@ export function CopilotoNortha() {
     }
   );
 
+  const iaAtiva = fonteChave !== "none";
+
   return (
     <div className="flex h-svh overflow-hidden bg-[radial-gradient(ellipse_at_top,_#e8eef7_0%,_#f5f7fa_45%,_#eef1f5_100%)]">
       <aside className="hidden w-72 shrink-0 border-border/80 border-r bg-sidebar/90 p-4 backdrop-blur md:flex md:flex-col">
         <SidebarContent
-          iaAtiva={iaAtiva}
+          fonteChave={fonteChave}
+          onAbrirApiKey={abrirApiKey}
           onPerguntaRapida={handlePerguntaRapida}
         />
       </aside>
@@ -321,7 +490,8 @@ export function CopilotoNortha() {
                   <SheetTitle>Menu Copiloto Northa</SheetTitle>
                 </SheetHeader>
                 <SidebarContent
-                  iaAtiva={iaAtiva}
+                  fonteChave={fonteChave}
+                  onAbrirApiKey={abrirApiKey}
                   onPerguntaRapida={handlePerguntaRapida}
                 />
               </SheetContent>
@@ -337,9 +507,20 @@ export function CopilotoNortha() {
             </div>
           </div>
 
-          <Badge variant={iaAtiva ? "default" : "outline"}>
-            {iaAtiva ? "Anthropic ativa" : "Sem chave de API"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={abrirApiKey}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <KeyRoundIcon data-icon="inline-start" />
+              API
+            </Button>
+            <Badge variant={iaAtiva ? "default" : "outline"}>
+              {rotuloBadge(fonteChave)}
+            </Badge>
+          </div>
         </header>
 
         <MessageScrollerProvider>
@@ -355,8 +536,9 @@ export function CopilotoNortha() {
                       <EmptyTitle>Como posso ajudar?</EmptyTitle>
                       <EmptyDescription>
                         Pergunte sobre políticas de RH, TI, Operações ou
-                        Compliance da Northa. Use as perguntas rápidas na barra
-                        lateral ou digite abaixo.
+                        Compliance da Northa. Configure sua chave da Anthropic
+                        pelo botão API para respostas com IA, ou use o modo
+                        offline.
                       </EmptyDescription>
                     </EmptyHeader>
                   </Empty>
@@ -459,6 +641,12 @@ export function CopilotoNortha() {
           </form>
         </footer>
       </div>
+
+      <ApiKeyDialog
+        onOpenChange={setApiKeyAberta}
+        onSaved={sincronizarFonteChave}
+        open={apiKeyAberta}
+      />
     </div>
   );
 }

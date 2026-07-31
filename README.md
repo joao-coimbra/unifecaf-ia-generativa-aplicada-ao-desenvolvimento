@@ -32,13 +32,16 @@ bun install
 
 ### 2. Configurar a chave da Anthropic (opcional)
 
-Crie `apps/web/.env.local`:
+Há duas formas (a chave do navegador tem prioridade):
+
+1. **Pelo app (recomendado para demonstração):** botão **API** no topo ou **Configurar chave da API** na sidebar. A chave fica só no `localStorage` do navegador de quem usa.
+2. **Por ambiente:** crie `apps/web/.env.local`:
 
 ```bash
 VITE_ANTHROPIC_API_KEY=sua_chave_aqui
 ```
 
-Sem a chave, o app funciona em **modo offline**: busca os documentos mais relevantes e exibe o conteúdo diretamente.
+Sem nenhuma chave, o app funciona em **modo offline**: busca os documentos mais relevantes e exibe o conteúdo diretamente.
 
 Há um exemplo em `apps/web/.env.example`.
 

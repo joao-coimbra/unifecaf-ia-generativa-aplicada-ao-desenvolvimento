@@ -1,3 +1,4 @@
+import { getApiKey } from "./api-key";
 import type { Documento } from "./knowledge-base";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
@@ -11,10 +12,6 @@ interface AnthropicTextBlock {
 
 interface AnthropicResponse {
   content: AnthropicTextBlock[];
-}
-
-export function isIaConfigurada(): boolean {
-  return Boolean(import.meta.env.VITE_ANTHROPIC_API_KEY?.trim());
 }
 
 function montarContexto(docs: Documento[]): string {
@@ -46,7 +43,7 @@ export async function gerarResposta(
   pergunta: string,
   docs: Documento[]
 ): Promise<string> {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY?.trim();
+  const apiKey = getApiKey();
 
   if (!apiKey || docs.length === 0) {
     return respostaOffline(docs);
