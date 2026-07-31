@@ -34,7 +34,7 @@ bun install
 
 Há duas formas (a chave do navegador tem prioridade):
 
-1. **Pelo app (recomendado para demonstração):** botão **API** no topo ou **Configurar chave da API** na sidebar. A chave fica só no `localStorage` do navegador de quem usa.
+1. **Pelo app (recomendado para demonstração):** na barra lateral, campo **Chave da API Anthropic** → cole a chave e clique em **Salvar chave**. A chave fica só no `localStorage` do navegador de quem usa. No celular, abra o menu (ícone ☰).
 2. **Por ambiente:** crie `apps/web/.env.local`:
 
 ```bash
