@@ -1,0 +1,17 @@
+{
+  "name": "mcp-server-northa",
+  "version": "1.0.0",
+  "description": "Servidor MCP que expõe a base de conhecimento da Northa Soluções Logísticas (RH, TI, Operações, Compliance) como uma ferramenta para agentes de IA.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "mcp-server-northa": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  }
+}

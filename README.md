@@ -1,95 +1,127 @@
-# unifecaf-ia-generativa-aplicada-ao-desenvolvimento
+# Copiloto Northa
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, and more.
+Assistente corporativo inteligente da empresa fictícia **Northa Soluções Logísticas**. Colaboradores fazem perguntas em linguagem natural e recebem respostas contextualizadas a partir de uma base de conhecimento interna (RH, TI, Operações e Compliance).
 
-## Features
+Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento** (UniFECAF).
 
-- **TypeScript** - For type safety and improved developer experience
-- **TanStack Start** - SSR framework with TanStack Router
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Turborepo** - Optimized monorepo build system
+## Tecnologias utilizadas
 
-## Getting Started
+- **Better-T-Stack** — scaffold do monorepo
+- **Turborepo** — orquestração de builds e scripts
+- **TanStack Start** — app React com Vite e SSR
+- **React 19** + **TypeScript**
+- **Tailwind CSS** + **shadcn/ui**
+- **Anthropic API** (Claude) — geração de respostas
+- **Bun** — runtime e gerenciador de pacotes
 
-First, install the dependencies:
+## Ferramentas de IA
+
+| Contexto | Ferramentas |
+| --- | --- |
+| Desenvolvimento | Cursor + Claude (geração de código, refino de prompts, estruturação do monorepo) |
+| Aplicação | Anthropic Messages API (`claude-sonnet-5`) com retrieval sobre documentos Markdown |
+| Diferencial MCP | Servidor MCP em `mcp-server-northa/` expondo a mesma base para agentes externos |
+
+## Como executar
+
+### 1. Instalar dependências
 
 ```bash
 bun install
 ```
 
-Then, run the development server:
+### 2. Configurar a chave da Anthropic (opcional)
+
+Crie `apps/web/.env.local`:
 
 ```bash
-bun run dev
+VITE_ANTHROPIC_API_KEY=sua_chave_aqui
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
+Sem a chave, o app funciona em **modo offline**: busca os documentos mais relevantes e exibe o conteúdo diretamente.
 
-## UI Customization
+Há um exemplo em `apps/web/.env.example`.
 
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
+### 3. Rodar em desenvolvimento
 
 ```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
+bun dev
 ```
 
-Import shared components like this:
+Abra [http://localhost:3001](http://localhost:3001).
 
-```tsx
-import { Button } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/button";
+### 4. Build de produção
+
+```bash
+bun run build
 ```
 
-### Add app-specific blocks
+## Prints da aplicação
 
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
+> Placeholder — adicione aqui screenshots da interface (sidebar, chat, modo offline e resposta com citação de fonte).
 
-## Deployment
+- `[ ]` Tela inicial / empty state
+- `[ ]` Conversa com citação de documento (ex.: RH-01)
+- `[ ]` Indicador de status da IA (conectada / offline)
+- `[ ]` Layout responsivo (mobile)
 
-### Vercel Services
+## Base de conhecimento
 
-- Target: web
-- Config: `vercel.json`
-- Link the project first: bun run deploy:setup
-- Local Vercel dev: bun run dev:vercel
-- Sync preview env: bun run env:preview
-- Sync production env: bun run env:production
-- Dry-run check (no upload): bun run deploy:check
-- Preview deploy: bun run deploy
-- Production deploy: bun run deploy:prod
-  Vercel Services share project environment variables, but deploys do not upload local `.env` files automatically. Link the project with `vercel link`, then run the env sync command before your first deploy (otherwise the deployment starts with no env vars), or pass one-off envs with `vercel deploy -e KEY=value`.
-  Pass Vercel CLI flags to the env sync command directly, for example: `bun run env:production --scope your-team`.
+Documentos em `apps/web/src/data/documentos-northa/`:
 
-For more details, see the guide on [Deploying to Vercel](https://www.better-t-stack.dev/docs/guides/vercel).
+| Código | Título | Categoria |
+| --- | --- | --- |
+| RH-01 | Política de Férias | RH |
+| RH-02 | Benefícios Corporativos | RH |
+| RH-03 | Home Office e Trabalho Híbrido | RH |
+| TI-01 | Solicitação de Equipamentos | TI |
+| TI-02 | Redefinição de Senha | TI |
+| TI-03 | Acesso VPN | TI |
+| OPS-01 | Acidente de Trabalho | Operações |
+| OPS-02 | Uso de EPI | Operações |
+| COMP-01 | Código de Conduta | Compliance |
+| COMP-02 | Presentes e Brindes | Compliance |
 
-## Project Structure
+Fluxo: **pergunta → retrieval lexical (`search.ts`) → geração (`ai.ts`) → citação da fonte na UI**.
+
+## Servidor MCP (diferencial)
+
+```bash
+cd mcp-server-northa
+npm install
+npm start
+```
+
+Veja `mcp-server-northa/README.md` para conectar no Claude Desktop ou Claude Code.
+
+## Deploy na Vercel
+
+1. Link do projeto: `bun run deploy:setup`
+2. Defina `VITE_ANTHROPIC_API_KEY` no painel da Vercel (ou sincronize com `bun run env:preview` / `bun run env:production`)
+3. Preview: `bun run deploy`
+4. Produção: `bun run deploy:prod`
+
+Configuração em `vercel.json`. Variáveis locais (`.env.local`) **não** sobem automaticamente no deploy.
+
+## Estrutura relevante
 
 ```
-unifecaf-ia-generativa-aplicada-ao-desenvolvimento/
-├── apps/
-│   ├── web/         # Frontend application (React + TanStack Start)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
+apps/web/
+  src/
+    components/copiloto-northa.tsx   # Interface do chat
+    data/documentos-northa/          # Base de conhecimento (Markdown)
+    lib/
+      knowledge-base.ts              # Parse e export dos documentos
+      search.ts                      # Retrieval por relevância
+      ai.ts                          # Chamada Anthropic + fallback offline
+    routes/index.tsx                 # Rota principal
+mcp-server-northa/                   # Servidor MCP da mesma base
+packages/ui/                         # Componentes shadcn/ui compartilhados
 ```
 
-## Available Scripts
+## Scripts
 
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run deploy:setup`: Link this repo to a Vercel project (first-time setup)
-- `bun run dev:vercel`: Run the Vercel Services dev environment locally
-- `bun run env:preview`: Sync local env files to the Vercel preview environment
-- `bun run env:production`: Sync local env files to the Vercel production environment
-- `bun run deploy`: Create a Vercel preview deployment
-- `bun run deploy:prod`: Deploy to Vercel production
-- `bun run deploy:check`: Dry-run a deploy to preview framework detection and included files without uploading
+- `bun run dev` — desenvolvimento
+- `bun run build` — build
+- `bun run check` — lint/format (Ultracite)
+- `bun run deploy` / `bun run deploy:prod` — deploy Vercel

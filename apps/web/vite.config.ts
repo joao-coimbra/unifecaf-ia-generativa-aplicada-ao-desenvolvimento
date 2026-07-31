@@ -5,13 +5,13 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  server: {
-    port: 3001,
-  },
+  plugins: [tailwindcss(), tanstackStart(), nitro(), viteReact()],
   resolve: {
     tsconfigPaths: true,
   },
-  plugins: [tailwindcss(), tanstackStart(), nitro(), viteReact()],
+  server: {
+    port: 3001,
+  },
   // Bundle all SSR deps: Vercel functions have no node_modules at runtime
   ssr: {
     noExternal: true,
