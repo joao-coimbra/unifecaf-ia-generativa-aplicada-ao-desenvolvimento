@@ -3,7 +3,7 @@ import { cn } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/lib/u
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("animate-pulse rounded-none bg-muted", className)}
+      className={cn("animate-pulse rounded-2xl bg-muted", className)}
       data-slot="skeleton"
       {...props}
     />

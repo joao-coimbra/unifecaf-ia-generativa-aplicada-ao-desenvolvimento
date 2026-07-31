@@ -344,7 +344,7 @@ function SidebarContent({
     <div className="flex h-full flex-col gap-5">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-none bg-primary text-primary-foreground">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <WarehouseIcon />
           </div>
           <div className="min-w-0">
