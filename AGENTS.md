@@ -124,3 +124,20 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `bun x ultracite fix` before committing to ensure compliance.
+
+---
+
+## Cursor Cloud specific instructions
+
+Turborepo monorepo. The only runnable app is `apps/web` (TanStack Start + Vite 8 + Nitro, SSR). Shared workspace packages: `packages/ui` (shadcn/ui primitives), `packages/env`, `packages/config`. There is no backend, database, or automated test suite.
+
+Toolchain: package manager is Bun (`bun@1.3.14`, installed at `~/.bun/bin` and on `PATH` for login shells). Node 22 is also available. Use Bun for everything.
+
+Standard commands (see `package.json` scripts):
+- Install deps: `bun install`
+- Dev server: `bun run dev` (or `bun run dev:web`) → http://localhost:3001
+- Build: `bun run build` (Nitro output at `apps/web/.output/`)
+- Type-check: `bun run check-types`
+- Lint: `bun run check`; autofix: `bun run fix` (Ultracite/Biome). The committed scaffold has many pre-existing lint/formatting errors, so a non-zero `check` exit is expected and is not caused by the environment.
+
+Known caveat — dev server is broken as committed: `bun run dev` starts Vite but every request 500s with `ReferenceError: module is not defined` from React's CJS entry. Cause: `apps/web/vite.config.ts` sets `ssr.noExternal: true` unconditionally, which Vite's dev SSR module runner cannot handle for CJS deps (it is only needed for the Vercel production build). Fix (application code change, not an env step): make it conditional, e.g. `export default defineConfig(({ command }) => ({ ..., ssr: command === "build" ? { noExternal: true } : {} }))`. Until that fix is applied, run/verify the app via the production build instead: `bun run build` then `PORT=3010 node apps/web/.output/server/index.mjs` (SSR-renders the page at http://localhost:3010/).
