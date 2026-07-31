@@ -1,0 +1,14 @@
+{
+  "extends": "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/config/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": [],
+    "paths": {
+      "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/*": ["./src/*"]
+    },
+    "strictNullChecks": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules"]
+}

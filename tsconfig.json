@@ -1,0 +1,6 @@
+{
+  "extends": "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/config/tsconfig.base.json",
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
+}
