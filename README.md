@@ -1,95 +1,130 @@
-# unifecaf-ia-generativa-aplicada-ao-desenvolvimento
+# Copiloto Northa
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, and more.
+Assistente corporativo inteligente da empresa fictícia **Northa Soluções Logísticas**. Colaboradores fazem perguntas em linguagem natural e recebem respostas contextualizadas a partir de uma base de conhecimento interna (RH, TI, Operações e Compliance).
 
-## Features
+Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento** (UniFECAF).
 
-- **TypeScript** - For type safety and improved developer experience
-- **TanStack Start** - SSR framework with TanStack Router
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Turborepo** - Optimized monorepo build system
+## Tecnologias utilizadas
 
-## Getting Started
+- **Better-T-Stack** — scaffold do monorepo
+- **Turborepo** — orquestração de builds e scripts
+- **TanStack Start** — app React com Vite e SSR
+- **TanStack AI** — `useChat` + SSE (`fetchServerSentEvents`) + `chat()` no servidor
+- **@tanstack/ai-anthropic** — adapter Anthropic (Claude)
+- **React 19** + **TypeScript**
+- **Tailwind CSS** + **shadcn/ui**
+- **Bun** — runtime e gerenciador de pacotes
 
-First, install the dependencies:
+## Ferramentas de IA
+
+| Contexto | Ferramentas |
+| --- | --- |
+| Desenvolvimento | Cursor + Claude (geração de código, refino de prompts, estruturação do monorepo) |
+| Aplicação | TanStack AI + Anthropic (`claude-sonnet-4-6`) com tools isomórficas ao MCP |
+| Diferencial MCP | Servidor MCP em `mcp-server-northa/` + mesmas tools no `/api/chat` |
+
+## Fluxo de perguntas (TanStack AI)
+
+1. O client usa `useChat` + `fetchServerSentEvents("/api/chat")` (mesmo padrão do helper [shadcn TanStack AI](https://ui.shadcn.com/docs/helpers/tanstack-ai), porém com conexão real à API).
+2. A rota `POST /api/chat` chama `chat()` com `createAnthropicChat` e as tools:
+   - `buscar_documento_northa`
+   - `listar_categorias_northa`
+3. O modelo **consulta a base via tool** antes de responder (mesmo contrato do servidor MCP).
+4. A UI faz streaming SSE e exibe as fontes citadas a partir do resultado da tool.
+
+Sem chave de API, o app fica em **modo offline explícito** (só retrieval local, sem geração por IA).
+
+## Como executar
+
+### 1. Instalar dependências
 
 ```bash
 bun install
 ```
 
-Then, run the development server:
+### 2. Configurar a chave da Anthropic
+
+Há duas formas (a chave do navegador tem prioridade no header `x-api-key`):
+
+1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar chave da API** → cole a chave e salve.
+2. **Por ambiente:** crie `apps/web/.env.local`:
 
 ```bash
-bun run dev
+ANTHROPIC_API_KEY=sua_chave_aqui
+# opcional / compatibilidade com o client:
+VITE_ANTHROPIC_API_KEY=sua_chave_aqui
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
+Há um exemplo em `apps/web/.env.example`.
 
-## UI Customization
-
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
+### 3. Rodar em desenvolvimento
 
 ```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
+bun dev
 ```
 
-Import shared components like this:
+Abra [http://localhost:3001](http://localhost:3001).
 
-```tsx
-import { Button } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/button";
+### 4. Build de produção
+
+```bash
+bun run build
 ```
 
-### Add app-specific blocks
+## Base de conhecimento
 
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
+Documentos em `apps/web/src/data/documentos-northa/`:
 
-## Deployment
+| Código | Título | Categoria |
+| --- | --- | --- |
+| RH-01 | Política de Férias | RH |
+| RH-02 | Benefícios Corporativos | RH |
+| RH-03 | Home Office e Trabalho Híbrido | RH |
+| TI-01 | Solicitação de Equipamentos | TI |
+| TI-02 | Redefinição de Senha | TI |
+| TI-03 | Acesso VPN | TI |
+| OPS-01 | Acidente de Trabalho | Operações |
+| OPS-02 | Uso de EPI | Operações |
+| COMP-01 | Código de Conduta | Compliance |
+| COMP-02 | Presentes e Brindes | Compliance |
 
-### Vercel Services
+## Servidor MCP (diferencial)
 
-- Target: web
-- Config: `vercel.json`
-- Link the project first: bun run deploy:setup
-- Local Vercel dev: bun run dev:vercel
-- Sync preview env: bun run env:preview
-- Sync production env: bun run env:production
-- Dry-run check (no upload): bun run deploy:check
-- Preview deploy: bun run deploy
-- Production deploy: bun run deploy:prod
-  Vercel Services share project environment variables, but deploys do not upload local `.env` files automatically. Link the project with `vercel link`, then run the env sync command before your first deploy (otherwise the deployment starts with no env vars), or pass one-off envs with `vercel deploy -e KEY=value`.
-  Pass Vercel CLI flags to the env sync command directly, for example: `bun run env:production --scope your-team`.
+As mesmas tools usadas no `/api/chat` estão expostas via stdio em `mcp-server-northa/` para Claude Desktop / Claude Code:
 
-For more details, see the guide on [Deploying to Vercel](https://www.better-t-stack.dev/docs/guides/vercel).
-
-## Project Structure
-
-```
-unifecaf-ia-generativa-aplicada-ao-desenvolvimento/
-├── apps/
-│   ├── web/         # Frontend application (React + TanStack Start)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
+```bash
+cd mcp-server-northa
+npm install
+npm start
 ```
 
-## Available Scripts
+Veja `mcp-server-northa/README.md` para conectar no Claude Desktop ou Claude Code.
 
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run deploy:setup`: Link this repo to a Vercel project (first-time setup)
-- `bun run dev:vercel`: Run the Vercel Services dev environment locally
-- `bun run env:preview`: Sync local env files to the Vercel preview environment
-- `bun run env:production`: Sync local env files to the Vercel production environment
-- `bun run deploy`: Create a Vercel preview deployment
-- `bun run deploy:prod`: Deploy to Vercel production
-- `bun run deploy:check`: Dry-run a deploy to preview framework detection and included files without uploading
+## Deploy na Vercel
+
+1. Link do projeto: `bun run deploy:setup`
+2. Defina `ANTHROPIC_API_KEY` (e opcionalmente `VITE_ANTHROPIC_API_KEY`) no painel da Vercel
+3. Preview: `bun run deploy`
+4. Produção: `bun run deploy:prod`
+
+Configuração em `vercel.json`. Variáveis locais (`.env.local`) **não** sobem automaticamente no deploy.
+
+## Estrutura relevante
+
+```
+apps/web/
+  src/
+    components/copiloto-northa.tsx   # UI + useChat (TanStack AI)
+    data/documentos-northa/          # Base de conhecimento (Markdown)
+    lib/
+      knowledge-base.ts              # Parse e export dos documentos
+      search.ts                      # Retrieval por relevância
+      northa-tools.ts                # Tools MCP (TanStack AI toolDefinition)
+      ai.ts                          # Fallback offline (sem IA)
+      api-key.ts                     # Chave no localStorage / env
+    routes/
+      index.tsx                      # Rota principal
+      api/chat.ts                    # POST /api/chat (SSE + Anthropic)
+
+mcp-server-northa/                   # Servidor MCP stdio (mesmo contrato de tools)
+```

@@ -8,7 +8,11 @@
     "dev": "vite dev"
   },
   "dependencies": {
+    "@shadcn/helpers": "^0.1.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/ai": "^0.42.0",
+    "@tanstack/ai-anthropic": "^0.16.3",
+    "@tanstack/ai-react": "^0.18.1",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-start": "^1.168.32",

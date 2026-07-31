@@ -21,7 +21,9 @@
     "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/*": ["../../packages/ui/src/*"]
+      "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/*": [
+        "../../packages/ui/src/*"
+      ]
     }
   }
 }
