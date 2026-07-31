@@ -71,6 +71,14 @@ Abra [http://localhost:3001](http://localhost:3001).
 bun run build
 ```
 
+## Prints da aplicação
+
+| Tela | Arquivo |
+| --- | --- |
+| Chat / empty state | ![Copiloto Northa](docs/screenshots/copiloto-northa-chat.png) |
+| Configurar chave da API | ![Modal da chave](docs/screenshots/configurar-chave-api.png) |
+| Modal da chave (detalhe) | ![Detalhe do modal](docs/screenshots/modal-chave-api.png) |
+
 ## Base de conhecimento
 
 Documentos em `apps/web/src/data/documentos-northa/`:
