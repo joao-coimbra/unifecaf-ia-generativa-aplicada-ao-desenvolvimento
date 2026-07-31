@@ -69,3 +69,13 @@ export function getApiKeySource(): ApiKeySource {
 export function isIaConfigurada(): boolean {
   return getApiKeySource() !== "none";
 }
+
+/** Headers enviados ao `/api/chat` (chave do navegador tem prioridade). */
+export function getChatAuthHeaders(): Record<string, string> {
+  const key = getApiKey();
+  if (!key) {
+    return {};
+  }
+
+  return { "x-api-key": key };
+}

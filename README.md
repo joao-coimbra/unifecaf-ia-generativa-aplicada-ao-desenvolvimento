@@ -9,9 +9,10 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 - **Better-T-Stack** — scaffold do monorepo
 - **Turborepo** — orquestração de builds e scripts
 - **TanStack Start** — app React com Vite e SSR
+- **TanStack AI** — `useChat` + SSE (`fetchServerSentEvents`) + `chat()` no servidor
+- **@tanstack/ai-anthropic** — adapter Anthropic (Claude)
 - **React 19** + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui**
-- **Anthropic API** (Claude) — geração de respostas
 - **Bun** — runtime e gerenciador de pacotes
 
 ## Ferramentas de IA
@@ -19,8 +20,19 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 | Contexto | Ferramentas |
 | --- | --- |
 | Desenvolvimento | Cursor + Claude (geração de código, refino de prompts, estruturação do monorepo) |
-| Aplicação | Anthropic Messages API (`claude-sonnet-5`) com retrieval sobre documentos Markdown |
-| Diferencial MCP | Servidor MCP em `mcp-server-northa/` expondo a mesma base para agentes externos |
+| Aplicação | TanStack AI + Anthropic (`claude-sonnet-4-6`) com tools isomórficas ao MCP |
+| Diferencial MCP | Servidor MCP em `mcp-server-northa/` + mesmas tools no `/api/chat` |
+
+## Fluxo de perguntas (TanStack AI)
+
+1. O client usa `useChat` + `fetchServerSentEvents("/api/chat")` (mesmo padrão do helper [shadcn TanStack AI](https://ui.shadcn.com/docs/helpers/tanstack-ai), porém com conexão real à API).
+2. A rota `POST /api/chat` chama `chat()` com `createAnthropicChat` e as tools:
+   - `buscar_documento_northa`
+   - `listar_categorias_northa`
+3. O modelo **consulta a base via tool** antes de responder (mesmo contrato do servidor MCP).
+4. A UI faz streaming SSE e exibe as fontes citadas a partir do resultado da tool.
+
+Sem chave de API, o app fica em **modo offline explícito** (só retrieval local, sem geração por IA).
 
 ## Como executar
 
@@ -30,18 +42,18 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 bun install
 ```
 
-### 2. Configurar a chave da Anthropic (opcional)
+### 2. Configurar a chave da Anthropic
 
-Há duas formas (a chave do navegador tem prioridade):
+Há duas formas (a chave do navegador tem prioridade no header `x-api-key`):
 
-1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar chave da API** (acima de “Sobre este projeto”) → cole a chave no modal e salve. No celular, abra o menu ☰ primeiro.
+1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar chave da API** → cole a chave e salve.
 2. **Por ambiente:** crie `apps/web/.env.local`:
 
 ```bash
+ANTHROPIC_API_KEY=sua_chave_aqui
+# opcional / compatibilidade com o client:
 VITE_ANTHROPIC_API_KEY=sua_chave_aqui
 ```
-
-Sem nenhuma chave, o app funciona em **modo offline**: busca os documentos mais relevantes e exibe o conteúdo diretamente.
 
 Há um exemplo em `apps/web/.env.example`.
 
@@ -58,15 +70,6 @@ Abra [http://localhost:3001](http://localhost:3001).
 ```bash
 bun run build
 ```
-
-## Prints da aplicação
-
-> Placeholder — adicione aqui screenshots da interface (sidebar, chat, modo offline e resposta com citação de fonte).
-
-- `[ ]` Tela inicial / empty state
-- `[ ]` Conversa com citação de documento (ex.: RH-01)
-- `[ ]` Indicador de status da IA (conectada / offline)
-- `[ ]` Layout responsivo (mobile)
 
 ## Base de conhecimento
 
@@ -85,9 +88,9 @@ Documentos em `apps/web/src/data/documentos-northa/`:
 | COMP-01 | Código de Conduta | Compliance |
 | COMP-02 | Presentes e Brindes | Compliance |
 
-Fluxo: **pergunta → retrieval lexical (`search.ts`) → geração (`ai.ts`) → citação da fonte na UI**.
-
 ## Servidor MCP (diferencial)
+
+As mesmas tools usadas no `/api/chat` estão expostas via stdio em `mcp-server-northa/` para Claude Desktop / Claude Code:
 
 ```bash
 cd mcp-server-northa
@@ -100,7 +103,7 @@ Veja `mcp-server-northa/README.md` para conectar no Claude Desktop ou Claude Cod
 ## Deploy na Vercel
 
 1. Link do projeto: `bun run deploy:setup`
-2. Defina `VITE_ANTHROPIC_API_KEY` no painel da Vercel (ou sincronize com `bun run env:preview` / `bun run env:production`)
+2. Defina `ANTHROPIC_API_KEY` (e opcionalmente `VITE_ANTHROPIC_API_KEY`) no painel da Vercel
 3. Preview: `bun run deploy`
 4. Produção: `bun run deploy:prod`
 
@@ -111,20 +114,17 @@ Configuração em `vercel.json`. Variáveis locais (`.env.local`) **não** sobem
 ```
 apps/web/
   src/
-    components/copiloto-northa.tsx   # Interface do chat
+    components/copiloto-northa.tsx   # UI + useChat (TanStack AI)
     data/documentos-northa/          # Base de conhecimento (Markdown)
     lib/
       knowledge-base.ts              # Parse e export dos documentos
       search.ts                      # Retrieval por relevância
-      ai.ts                          # Chamada Anthropic + fallback offline
-    routes/index.tsx                 # Rota principal
-mcp-server-northa/                   # Servidor MCP da mesma base
-packages/ui/                         # Componentes shadcn/ui compartilhados
+      northa-tools.ts                # Tools MCP (TanStack AI toolDefinition)
+      ai.ts                          # Fallback offline (sem IA)
+      api-key.ts                     # Chave no localStorage / env
+    routes/
+      index.tsx                      # Rota principal
+      api/chat.ts                    # POST /api/chat (SSE + Anthropic)
+
+mcp-server-northa/                   # Servidor MCP stdio (mesmo contrato de tools)
 ```
-
-## Scripts
-
-- `bun run dev` — desenvolvimento
-- `bun run build` — build
-- `bun run check` — lint/format (Ultracite)
-- `bun run deploy` / `bun run deploy:prod` — deploy Vercel

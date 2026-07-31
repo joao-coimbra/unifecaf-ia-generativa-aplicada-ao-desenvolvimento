@@ -1,3 +1,5 @@
+import type { UIMessage } from "@tanstack/ai-react";
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
 import {
   Avatar,
   AvatarFallback,
@@ -71,12 +73,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
-import { gerarResposta } from "../lib/ai";
+import { respostaOffline } from "../lib/ai";
 import {
   type ApiKeySource,
   clearStoredApiKey,
   getApiKeySource,
+  getChatAuthHeaders,
   getStoredApiKey,
   setStoredApiKey,
 } from "../lib/api-key";
@@ -87,11 +91,16 @@ import {
 } from "../lib/knowledge-base";
 import { buscarDocumentos } from "../lib/search";
 
-interface Mensagem {
+interface MensagemOffline {
   content: string;
   fontes?: Documento[];
   id: string;
   role: "user" | "assistant";
+}
+
+interface FonteCitada {
+  codigo: string;
+  titulo: string;
 }
 
 const PERGUNTAS_RAPIDAS = [
@@ -112,6 +121,8 @@ const CATEGORIA_VARIANT: Record<
   RH: "default",
   TI: "secondary",
 };
+
+const BOLD_MARKDOWN_REGEX = /\*\*(.*?)\*\*/g;
 
 function criarId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -135,6 +146,58 @@ function rotuloBadge(fonte: ApiKeySource): string {
     return "Anthropic ativa";
   }
   return "Sem chave de API";
+}
+
+function textoDaMensagem(message: UIMessage): string {
+  return message.parts
+    .filter(
+      (part): part is { content: string; type: "text" } => part.type === "text"
+    )
+    .map((part) => part.content)
+    .join("\n")
+    .trim();
+}
+
+function fontesDaMensagem(message: UIMessage): FonteCitada[] {
+  const fontes: FonteCitada[] = [];
+  const vistos = new Set<string>();
+
+  for (const part of message.parts) {
+    if (part.type !== "tool-call" || part.name !== "buscar_documento_northa") {
+      continue;
+    }
+
+    const output = part.output as
+      | {
+          documentos?: Array<{ codigo?: string; titulo?: string }>;
+        }
+      | undefined;
+
+    for (const doc of output?.documentos ?? []) {
+      if (!(doc.codigo && doc.titulo) || vistos.has(doc.codigo)) {
+        continue;
+      }
+      vistos.add(doc.codigo);
+      fontes.push({ codigo: doc.codigo, titulo: doc.titulo });
+    }
+  }
+
+  return fontes;
+}
+
+function estaConsultandoBase(message: UIMessage | undefined): boolean {
+  if (message?.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(
+    (part) =>
+      part.type === "tool-call" &&
+      part.name === "buscar_documento_northa" &&
+      (part.state === "awaiting-input" ||
+        part.state === "input-streaming" ||
+        part.state === "input-complete")
+  );
 }
 
 function PerguntaRapidaButton({
@@ -184,6 +247,7 @@ function ApiKeyDialog({ onSaved }: { onSaved: () => void }) {
     setMensagem("Chave salva neste navegador.");
     onSaved();
     setOpen(false);
+    toast.success("Chave da API salva — IA conectada.");
   });
 
   const handleRemover = useEffectEvent(() => {
@@ -191,6 +255,7 @@ function ApiKeyDialog({ onSaved }: { onSaved: () => void }) {
     setRascunho("");
     setMensagem("Chave removida.");
     onSaved();
+    toast.message("Chave removida — voltando ao modo offline.");
   });
 
   const handleRascunhoChange = useEffectEvent(
@@ -216,9 +281,9 @@ function ApiKeyDialog({ onSaved }: { onSaved: () => void }) {
         <DialogHeader>
           <DialogTitle>Chave da API Anthropic</DialogTitle>
           <DialogDescription>
-            Cole sua própria chave para ativar respostas com IA. Ela fica salva
-            apenas neste navegador (localStorage) e é enviada direto à
-            Anthropic.
+            Cole sua chave para ativar o fluxo TanStack AI (`/api/chat`) com as
+            ferramentas MCP da base Northa. Ela fica salva neste navegador e é
+            enviada ao servidor da aplicação (não fica embutida no código).
           </DialogDescription>
         </DialogHeader>
 
@@ -340,11 +405,10 @@ function SidebarContent({
               <DialogTitle>Sobre o Copiloto Northa</DialogTitle>
               <DialogDescription>
                 Aplicação acadêmica da disciplina IA Generativa Aplicada ao
-                Desenvolvimento (UniFECAF). Demonstra um assistente corporativo
-                que consulta uma base de conhecimento interna (RH, TI, Operações
-                e Compliance) e responde em linguagem natural com suporte da API
-                Anthropic. Use o botão acima para colar sua chave da API. A
-                empresa Northa Soluções Logísticas é fictícia.
+                Desenvolvimento (UniFECAF). O chat usa TanStack AI (`useChat` +
+                SSE) com Anthropic e ferramentas equivalentes ao MCP
+                (`buscar_documento_northa`) sobre a base interna. Sem chave, o
+                modo offline só exibe documentos locais — sem geração por IA.
               </DialogDescription>
             </DialogHeader>
           </DialogContent>
@@ -353,8 +417,6 @@ function SidebarContent({
     </div>
   );
 }
-
-const BOLD_MARKDOWN_REGEX = /\*\*(.*?)\*\*/g;
 
 function ConteudoMensagem({ content }: { content: string }) {
   return (
@@ -374,62 +436,344 @@ function ConteudoMensagem({ content }: { content: string }) {
   );
 }
 
+function IndicadorFerramenta({ nome }: { nome: string }) {
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner />
+      <span className="animate-pulse">Consultando {nome}...</span>
+    </div>
+  );
+}
+
+function EmptyState({ iaAtiva }: { iaAtiva: boolean }) {
+  if (iaAtiva) {
+    return (
+      <Empty className="border-0 bg-transparent">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BotIcon />
+          </EmptyMedia>
+          <EmptyTitle>Como posso ajudar?</EmptyTitle>
+          <EmptyDescription>
+            Pergunte sobre políticas de RH, TI, Operações ou Compliance. A IA
+            consulta a base via ferramenta MCP{" "}
+            <strong>buscar_documento_northa</strong> antes de responder.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <Empty className="border-0 bg-transparent">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BotIcon />
+        </EmptyMedia>
+        <EmptyTitle>Modo offline</EmptyTitle>
+        <EmptyDescription>
+          Sem chave da API, as respostas só mostram documentos locais — sem
+          geração por IA. Na barra lateral, use{" "}
+          <strong>Configurar chave da API</strong> para conectar o TanStack AI.
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function ConteudoBolhaAi({
+  consultando,
+  consultandoBase,
+  isUltima,
+  texto,
+}: {
+  consultando: boolean;
+  consultandoBase: boolean;
+  isUltima: boolean;
+  texto: string;
+}) {
+  if (consultando && !texto) {
+    return <IndicadorFerramenta nome="buscar_documento_northa" />;
+  }
+
+  if (texto) {
+    return <ConteudoMensagem content={texto} />;
+  }
+
+  if (consultandoBase && isUltima) {
+    return <IndicadorFerramenta nome="buscar_documento_northa" />;
+  }
+
+  return <span className="text-muted-foreground text-sm">…</span>;
+}
+
+function FontesBadges({ fontes }: { fontes: FonteCitada[] }) {
+  if (fontes.length === 0) {
+    return null;
+  }
+
+  return (
+    <MessageFooter className="flex flex-wrap gap-1.5">
+      {fontes.map((fonte) => (
+        <Badge key={fonte.codigo} variant="outline">
+          {fonte.codigo} · {fonte.titulo}
+        </Badge>
+      ))}
+    </MessageFooter>
+  );
+}
+
+function MensagemAiItem({
+  consultandoBase,
+  digitando,
+  isUltima,
+  mensagem,
+}: {
+  consultandoBase: boolean;
+  digitando: boolean;
+  isUltima: boolean;
+  mensagem: UIMessage;
+}) {
+  const isUser = mensagem.role === "user";
+  const texto = textoDaMensagem(mensagem);
+  const fontes = fontesDaMensagem(mensagem);
+  const consultando = digitando && isUltima && estaConsultandoBase(mensagem);
+
+  return (
+    <MessageScrollerItem key={mensagem.id} scrollAnchor={isUltima || digitando}>
+      <Message align={isUser ? "end" : "start"}>
+        <MessageAvatar>
+          <Avatar size="sm">
+            <AvatarFallback>
+              {isUser ? <UserIcon /> : <BotIcon />}
+            </AvatarFallback>
+          </Avatar>
+        </MessageAvatar>
+        <MessageContent>
+          <Bubble
+            align={isUser ? "end" : "start"}
+            variant={isUser ? "default" : "secondary"}
+          >
+            <BubbleContent>
+              <ConteudoBolhaAi
+                consultando={consultando}
+                consultandoBase={consultandoBase}
+                isUltima={isUltima}
+                texto={texto}
+              />
+            </BubbleContent>
+          </Bubble>
+          <FontesBadges fontes={fontes} />
+        </MessageContent>
+      </Message>
+    </MessageScrollerItem>
+  );
+}
+
+function MensagemOfflineItem({
+  digitando,
+  isUltima,
+  mensagem,
+}: {
+  digitando: boolean;
+  isUltima: boolean;
+  mensagem: MensagemOffline;
+}) {
+  const isUser = mensagem.role === "user";
+  const fontes = (mensagem.fontes ?? []).map((doc) => ({
+    codigo: doc.codigo,
+    titulo: doc.titulo,
+  }));
+
+  return (
+    <MessageScrollerItem
+      key={mensagem.id}
+      scrollAnchor={isUltima && !digitando}
+    >
+      <Message align={isUser ? "end" : "start"}>
+        <MessageAvatar>
+          <Avatar size="sm">
+            <AvatarFallback>
+              {isUser ? <UserIcon /> : <BotIcon />}
+            </AvatarFallback>
+          </Avatar>
+        </MessageAvatar>
+        <MessageContent>
+          <Bubble
+            align={isUser ? "end" : "start"}
+            variant={isUser ? "default" : "secondary"}
+          >
+            <BubbleContent>
+              <ConteudoMensagem content={mensagem.content} />
+            </BubbleContent>
+          </Bubble>
+          <FontesBadges fontes={fontes} />
+        </MessageContent>
+      </Message>
+    </MessageScrollerItem>
+  );
+}
+
+function IndicadorDigitando({ iaAtiva }: { iaAtiva: boolean }) {
+  return (
+    <MessageScrollerItem scrollAnchor>
+      <Message align="start">
+        <MessageAvatar>
+          <Avatar size="sm">
+            <AvatarFallback>
+              <BotIcon />
+            </AvatarFallback>
+          </Avatar>
+        </MessageAvatar>
+        <MessageContent>
+          <Bubble align="start" variant="secondary">
+            <BubbleContent>
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Spinner />
+                <span className="animate-pulse">
+                  {iaAtiva ? "conectando à IA..." : "buscando na base..."}
+                </span>
+              </div>
+            </BubbleContent>
+          </Bubble>
+        </MessageContent>
+      </Message>
+    </MessageScrollerItem>
+  );
+}
+
+function deveMostrarIndicadorDigitando({
+  consultandoBase,
+  digitando,
+  iaAtiva,
+  ultimaAi,
+}: {
+  consultandoBase: boolean;
+  digitando: boolean;
+  iaAtiva: boolean;
+  ultimaAi: UIMessage | undefined;
+}): boolean {
+  if (!digitando) {
+    return false;
+  }
+
+  if (!iaAtiva) {
+    return true;
+  }
+
+  if (ultimaAi?.role !== "assistant") {
+    return true;
+  }
+
+  const temTexto = Boolean(textoDaMensagem(ultimaAi));
+  return !(temTexto || consultandoBase);
+}
+
 export function CopilotoNortha() {
-  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [entrada, setEntrada] = useState("");
-  const [digitando, setDigitando] = useState(false);
   const [sidebarAberta, setSidebarAberta] = useState(false);
   const [fonteChave, setFonteChave] = useState<ApiKeySource>("none");
+  const [offlineMensagens, setOfflineMensagens] = useState<MensagemOffline[]>(
+    []
+  );
+  const [offlineDigitando, setOfflineDigitando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const digitandoRef = useRef(digitando);
   const entradaRef = useRef(entrada);
+  const fonteChaveRef = useRef(fonteChave);
+  const offlineDigitandoRef = useRef(offlineDigitando);
+  const isLoadingRef = useRef(false);
 
-  digitandoRef.current = digitando;
   entradaRef.current = entrada;
+  fonteChaveRef.current = fonteChave;
+  offlineDigitandoRef.current = offlineDigitando;
+
+  const {
+    messages: aiMessages,
+    sendMessage,
+    isLoading,
+    error,
+    clear,
+  } = useChat({
+    connection: fetchServerSentEvents("/api/chat", () => ({
+      headers: getChatAuthHeaders(),
+    })),
+  });
+
+  isLoadingRef.current = isLoading;
 
   useEffect(() => {
     setFonteChave(getApiKeySource());
   }, []);
 
   useEffect(() => {
-    if (!digitando) {
+    if (!(isLoading || offlineDigitando)) {
       inputRef.current?.focus();
     }
-  }, [digitando]);
+  }, [isLoading, offlineDigitando]);
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error.message || "Falha na conexão com a IA.");
+    }
+  }, [error]);
 
   const sincronizarFonteChave = useEffectEvent(() => {
     setFonteChave(getApiKeySource());
   });
 
-  const enviarPergunta = useEffectEvent(async (perguntaBruta: string) => {
-    const pergunta = perguntaBruta.trim();
-    if (!pergunta || digitandoRef.current) {
+  const enviarOffline = useEffectEvent((pergunta: string) => {
+    if (offlineDigitandoRef.current) {
       return;
     }
 
-    const mensagemUsuario: Mensagem = {
-      content: pergunta,
-      id: criarId(),
-      role: "user",
-    };
-
-    setMensagens((atual) => [...atual, mensagemUsuario]);
+    setOfflineMensagens((atual) => [
+      ...atual,
+      { content: pergunta, id: criarId(), role: "user" },
+    ]);
     setEntrada("");
-    setDigitando(true);
+    setOfflineDigitando(true);
     setSidebarAberta(false);
 
     const docs = buscarDocumentos(pergunta);
-    const resposta = await gerarResposta(pergunta, docs);
+    const resposta = respostaOffline(docs);
 
-    const mensagemAssistente: Mensagem = {
-      content: resposta,
-      fontes: docs,
-      id: criarId(),
-      role: "assistant",
-    };
+    setOfflineMensagens((atual) => [
+      ...atual,
+      {
+        content: resposta,
+        fontes: docs,
+        id: criarId(),
+        role: "assistant",
+      },
+    ]);
+    setOfflineDigitando(false);
+  });
 
-    setMensagens((atual) => [...atual, mensagemAssistente]);
-    setDigitando(false);
+  const enviarPergunta = useEffectEvent(async (perguntaBruta: string) => {
+    const pergunta = perguntaBruta.trim();
+    if (!pergunta) {
+      return;
+    }
+
+    if (fonteChaveRef.current === "none") {
+      enviarOffline(pergunta);
+      return;
+    }
+
+    if (isLoadingRef.current) {
+      return;
+    }
+
+    setEntrada("");
+    setSidebarAberta(false);
+
+    try {
+      await sendMessage(pergunta);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Falha ao enviar a pergunta.";
+      toast.error(message);
+    }
   });
 
   const handlePerguntaRapida = useEffectEvent((pergunta: string) => {
@@ -447,7 +791,25 @@ export function CopilotoNortha() {
     }
   );
 
+  const handleLimpar = useEffectEvent(() => {
+    clear();
+    setOfflineMensagens([]);
+  });
+
   const iaAtiva = fonteChave !== "none";
+  const digitando = iaAtiva ? isLoading : offlineDigitando;
+  const ultimaAi = aiMessages.at(-1);
+  const consultandoBase = iaAtiva && estaConsultandoBase(ultimaAi);
+  const temMensagens = aiMessages.length > 0 || offlineMensagens.length > 0;
+  const mostrarEmpty =
+    !digitando &&
+    (iaAtiva ? aiMessages.length === 0 : offlineMensagens.length === 0);
+  const mostrarDigitando = deveMostrarIndicadorDigitando({
+    consultandoBase,
+    digitando,
+    iaAtiva,
+    ultimaAi,
+  });
 
   return (
     <div className="flex h-svh overflow-hidden bg-[radial-gradient(ellipse_at_top,_#e8eef7_0%,_#f5f7fa_45%,_#eef1f5_100%)]">
@@ -492,102 +854,56 @@ export function CopilotoNortha() {
                 Copiloto Northa
               </h1>
               <p className="text-muted-foreground text-xs">
-                Assistente corporativo inteligente
+                TanStack AI · tools MCP · base Northa
               </p>
             </div>
           </div>
 
-          <Badge variant={iaAtiva ? "default" : "outline"}>
-            {rotuloBadge(fonteChave)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {temMensagens ? (
+              <Button onClick={handleLimpar} size="sm" variant="ghost">
+                Limpar
+              </Button>
+            ) : null}
+            <Badge variant={iaAtiva ? "default" : "outline"}>
+              {rotuloBadge(fonteChave)}
+            </Badge>
+          </div>
         </header>
 
         <MessageScrollerProvider>
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
               <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-6">
-                {mensagens.length === 0 && !digitando ? (
-                  <Empty className="border-0 bg-transparent">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <BotIcon />
-                      </EmptyMedia>
-                      <EmptyTitle>Como posso ajudar?</EmptyTitle>
-                      <EmptyDescription>
-                        Pergunte sobre políticas de RH, TI, Operações ou
-                        Compliance da Northa. Na barra lateral, use{" "}
-                        <strong>Configurar chave da API</strong> para colar sua
-                        chave Anthropic — ou use o modo offline.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
+                {mostrarEmpty ? <EmptyState iaAtiva={iaAtiva} /> : null}
+
+                {iaAtiva
+                  ? aiMessages.map((mensagem, index) => (
+                      <MensagemAiItem
+                        consultandoBase={consultandoBase}
+                        digitando={digitando}
+                        isUltima={index === aiMessages.length - 1}
+                        key={mensagem.id}
+                        mensagem={mensagem}
+                      />
+                    ))
+                  : offlineMensagens.map((mensagem, index) => (
+                      <MensagemOfflineItem
+                        digitando={digitando}
+                        isUltima={index === offlineMensagens.length - 1}
+                        key={mensagem.id}
+                        mensagem={mensagem}
+                      />
+                    ))}
+
+                {mostrarDigitando ? (
+                  <IndicadorDigitando iaAtiva={iaAtiva} />
                 ) : null}
 
-                {mensagens.map((mensagem, index) => {
-                  const isUser = mensagem.role === "user";
-                  const isLast = index === mensagens.length - 1 && !digitando;
-
-                  return (
-                    <MessageScrollerItem
-                      key={mensagem.id}
-                      scrollAnchor={isLast}
-                    >
-                      <Message align={isUser ? "end" : "start"}>
-                        <MessageAvatar>
-                          <Avatar size="sm">
-                            <AvatarFallback>
-                              {isUser ? <UserIcon /> : <BotIcon />}
-                            </AvatarFallback>
-                          </Avatar>
-                        </MessageAvatar>
-                        <MessageContent>
-                          <Bubble
-                            align={isUser ? "end" : "start"}
-                            variant={isUser ? "default" : "secondary"}
-                          >
-                            <BubbleContent>
-                              <ConteudoMensagem content={mensagem.content} />
-                            </BubbleContent>
-                          </Bubble>
-                          {mensagem.fontes && mensagem.fontes.length > 0 ? (
-                            <MessageFooter className="flex flex-wrap gap-1.5">
-                              {mensagem.fontes.map((fonte) => (
-                                <Badge key={fonte.codigo} variant="outline">
-                                  {fonte.codigo} · {fonte.titulo}
-                                </Badge>
-                              ))}
-                            </MessageFooter>
-                          ) : null}
-                        </MessageContent>
-                      </Message>
-                    </MessageScrollerItem>
-                  );
-                })}
-
-                {digitando ? (
-                  <MessageScrollerItem scrollAnchor>
-                    <Message align="start">
-                      <MessageAvatar>
-                        <Avatar size="sm">
-                          <AvatarFallback>
-                            <BotIcon />
-                          </AvatarFallback>
-                        </Avatar>
-                      </MessageAvatar>
-                      <MessageContent>
-                        <Bubble align="start" variant="secondary">
-                          <BubbleContent>
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                              <Spinner />
-                              <span className="animate-pulse">
-                                digitando...
-                              </span>
-                            </div>
-                          </BubbleContent>
-                        </Bubble>
-                      </MessageContent>
-                    </Message>
-                  </MessageScrollerItem>
+                {error && iaAtiva ? (
+                  <p className="text-destructive text-sm">
+                    Erro na IA: {error.message}
+                  </p>
                 ) : null}
               </MessageScrollerContent>
             </MessageScrollerViewport>
@@ -603,7 +919,11 @@ export function CopilotoNortha() {
                 className="text-sm"
                 disabled={digitando}
                 onChange={handleEntradaChange}
-                placeholder="Pergunte algo sobre as políticas da Northa..."
+                placeholder={
+                  iaAtiva
+                    ? "Pergunte algo — a IA consulta a base via MCP..."
+                    : "Modo offline: busque documentos locais (configure a API para IA)..."
+                }
                 ref={inputRef}
                 value={entrada}
               />

@@ -5,10 +5,11 @@ fictícia **Northa Soluções Logísticas** (RH, TI, Operações, Compliance) co
 para agentes de IA.
 
 Esse servidor é a evidência prática do **diferencial "Uso de MCP"** pedido no trabalho: ele
-mostra um agente de IA (Claude) consultando uma fonte de dados externa via protocolo MCP —
-o mesmo conceito de arquitetura usado na aplicação principal (o Copiloto Northa em
-TanStack Start), só que aqui rodando fora do navegador, direto no seu ambiente de
-desenvolvimento.
+mostra um agente de IA (Claude) consultando uma fonte de dados externa via protocolo MCP.
+
+Na aplicação web, o Copiloto Northa usa **as mesmas tools** (`buscar_documento_northa` e
+`listar_categorias_northa`) via TanStack AI em `POST /api/chat` (`apps/web/src/lib/northa-tools.ts`).
+Este servidor MCP é a versão stdio do mesmo contrato — para Claude Desktop / Claude Code.
 
 ## Ferramentas expostas
 
