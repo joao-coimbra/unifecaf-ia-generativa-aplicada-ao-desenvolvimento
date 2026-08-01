@@ -476,7 +476,7 @@ function EmptyState({
 }) {
   if (iaAtiva) {
     return (
-      <Empty className="border-0 bg-transparent">
+      <Empty className="w-full border-0 bg-transparent py-16">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <BotIcon />
@@ -493,7 +493,7 @@ function EmptyState({
   }
 
   return (
-    <Empty className="border-0 bg-transparent">
+    <Empty className="w-full border-0 bg-transparent py-16">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <KeyRoundIcon />
@@ -803,9 +803,15 @@ export function CopilotoNortha() {
         <MessageScrollerProvider autoScroll defaultScrollPosition="end">
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-6 px-4 py-6">
+              <MessageScrollerContent
+                className={
+                  mostrarEmpty
+                    ? "mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center gap-0 px-4 py-6"
+                    : "mx-auto w-full max-w-3xl gap-6 px-4 py-6"
+                }
+              >
                 {mostrarEmpty ? (
-                  <MessageScrollerItem>
+                  <MessageScrollerItem className="flex min-h-0 w-full flex-col items-center justify-center [contain-intrinsic-size:none] [content-visibility:visible]">
                     <EmptyState
                       iaAtiva={iaAtiva}
                       onConfigurarChave={abrirConfiguracaoChave}

@@ -8,6 +8,8 @@ import {
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/dialog";
 import { ScrollArea } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/scroll-area";
 
+import { MarkdownDocumento } from "./markdown-documento";
+
 export interface DocumentoVisualizado {
   categoria: string;
   codigo: string;
@@ -26,7 +28,7 @@ export function DialogDocumento({
 }) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-4 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[85vh] flex-col gap-4 overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="pr-8">
             {documento
@@ -46,8 +48,14 @@ export function DialogDocumento({
         </DialogHeader>
 
         <ScrollArea className="min-h-0 flex-1 pr-3">
-          <article className="whitespace-pre-wrap pb-2 font-mono text-muted-foreground text-sm leading-relaxed">
-            {documento?.conteudo || "Documento sem conteúdo."}
+          <article className="pb-4">
+            {documento ? (
+              <MarkdownDocumento content={documento.conteudo} />
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Documento sem conteúdo.
+              </p>
+            )}
           </article>
         </ScrollArea>
       </DialogContent>

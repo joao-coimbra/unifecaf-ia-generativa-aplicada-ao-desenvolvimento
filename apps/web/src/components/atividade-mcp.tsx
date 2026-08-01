@@ -7,7 +7,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/attachment";
-import { CheckIcon, FileSearchIcon, FileTextIcon } from "lucide-react";
+import { CheckIcon, FileTextIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { documentos as baseDocumentos } from "../lib/knowledge-base";
@@ -192,27 +192,18 @@ export function AtividadeMcp({
     };
   }, [animar, chave, totalDocumentos]);
 
-  const mostrandoBusca = animar && documentos.length === 0;
+  const mostrandoPensando = animar && documentos.length === 0;
 
   return (
     <>
       <div className="flex w-full max-w-md flex-col gap-2">
-        {mostrandoBusca ? (
-          <Attachment className="w-full" size="sm" state="processing">
-            <AttachmentMedia>
-              <FileSearchIcon />
-            </AttachmentMedia>
-            <AttachmentContent>
-              <AttachmentTitle>
-                {consultando ? "Consultando a base…" : "Pensando…"}
-              </AttachmentTitle>
-              <AttachmentDescription>
-                {consultando
-                  ? "MCP · buscar_documento_northa"
-                  : "Preparando consulta à base Northa"}
-              </AttachmentDescription>
-            </AttachmentContent>
-          </Attachment>
+        {mostrandoPensando ? (
+          <span
+            className="shimmer w-fit px-3 text-muted-foreground text-sm"
+            role="status"
+          >
+            {consultando ? "Consultando a base…" : "Pensando…"}
+          </span>
         ) : null}
 
         {documentos.map((doc, index) => {
