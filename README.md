@@ -1,41 +1,69 @@
 # Copiloto Northa
 
-Assistente corporativo inteligente da empresa fictícia **Northa Soluções Logísticas**. Colaboradores fazem perguntas em linguagem natural e recebem respostas contextualizadas a partir de uma base de conhecimento interna (RH, TI, Operações e Compliance).
+Assistente corporativo inteligente da empresa fictícia **Northa Soluções Logísticas**. Colaboradores fazem perguntas em linguagem natural e recebem respostas contextualizadas a partir de uma base de conhecimento interna (documentos de RH, TI, Operações e Compliance), usando IA generativa com citação das fontes consultadas.
 
 Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento** (UniFECAF).
 
+## Demonstração
+
+**Aplicação publicada (Vercel):** [https://unifecaf-copiloto-northa.vercel.app](https://unifecaf-copiloto-northa.vercel.app)
+
+| Tela | Preview |
+| --- | --- |
+| Estado vazio — texto informativo centralizado | ![Estado vazio](docs/screenshots/01-empty-state.png) |
+| Leitura progressiva dos documentos (Attachment em processing) | ![Leitura MCP](docs/screenshots/02-mcp-reading.png) |
+| Resposta final com citação das fontes | ![Resposta com fontes](docs/screenshots/03-answer-sources.png) |
+| Modo escuro | ![Modo escuro](docs/screenshots/04-dark-mode.png) |
+| Dialog do documento em rich text | ![Dialog do documento](docs/screenshots/05-document-dialog.png) |
+
+## Funcionalidades principais
+
+- **Chat em linguagem natural** sobre a base de conhecimento da Northa (RH, TI, Operações e Compliance).
+- **Fluxo de resposta em etapas visíveis:**
+  - indicador **Pensando…** / **Consultando a base…** com efeito `shimmer`;
+  - leitura progressiva dos documentos relevantes como cartões `Attachment` (estados *idle* → *processing* → *done*);
+  - só então a bolha com a resposta final.
+- **Citação das fontes:** códigos dos documentos (ex.: `RH-01`, `RH-03`) na resposta e cartões de anexo clicáveis com título e categoria.
+- **Dialog do documento completo**, renderizado como rich text com `react-markdown` + `remark-gfm` (não como Markdown cru).
+- **Dois provedores de IA intercambiáveis:** Claude (Anthropic) e Google Gemini, configuráveis pelo usuário com chave própria. **Não há modo offline** — a chave é obrigatória.
+- **Modo escuro** (toggle com `next-themes`).
+- **Interface shadcn/ui** com os padrões oficiais de `Message`, `MessageScroller`, `Attachment`, `Avatar`, `Dialog`, `Bubble`, entre outros.
+- **Perguntas rápidas** e categorias na barra lateral para facilitar a demonstração.
+- **Servidor MCP stdio** em `mcp-server-northa/` com o mesmo contrato de tools da aplicação web (`buscar_documento_northa`, `listar_categorias_northa`), para uso em Claude Desktop / Claude Code.
+
 ## Tecnologias utilizadas
 
-- **Better-T-Stack** — scaffold do monorepo
-- **Turborepo** — orquestração de builds e scripts
-- **TanStack Start** — app React com Vite e SSR
-- **TanStack AI** — `useChat` + SSE (`fetchServerSentEvents`) + `chat()` no servidor
-- **@tanstack/ai-anthropic** — adapter Anthropic (Claude)
-- **@tanstack/ai-gemini** — adapter Google Gemini
-- **React 19** + **TypeScript**
-- **Tailwind CSS** + **shadcn/ui**
-- **Bun** — runtime e gerenciador de pacotes
+Com base no monorepo e nos `package.json` do projeto:
 
-## Ferramentas de IA
-
-| Contexto | Ferramentas |
+| Camada | Tecnologias |
 | --- | --- |
-| Desenvolvimento | Cursor + Claude (geração de código, refino de prompts, estruturação do monorepo) |
-| Aplicação | TanStack AI + Claude (`claude-sonnet-4-6`) **ou** Gemini (`gemini-2.5-flash`) com tools isomórficas ao MCP |
-| Diferencial MCP | Servidor MCP em `mcp-server-northa/` + mesmas tools no `/api/chat` |
+| App | React 19, TypeScript, TanStack Start (Vite 8 + Nitro SSR) |
+| Chat / IA | TanStack AI (`useChat` + SSE), `@tanstack/ai-anthropic`, `@tanstack/ai-gemini` |
+| Modelos usados | Claude `claude-sonnet-4-6` · Gemini `gemini-2.5-flash-lite` |
+| UI | Tailwind CSS 4, shadcn/ui (`packages/ui`), Lucide icons |
+| Markdown | `react-markdown` + `remark-gfm` |
+| Monorepo | Turborepo, Better-T-Stack, Bun (`bun@1.3.14`) |
+| Deploy | Vercel |
 
-## Fluxo de perguntas (TanStack AI)
+## Ferramentas de IA utilizadas no desenvolvimento
 
-1. O client usa `useChat` + `fetchServerSentEvents("/api/chat")` (mesmo padrão do helper [shadcn TanStack AI](https://ui.shadcn.com/docs/helpers/tanstack-ai), porém com conexão real à API).
-2. A rota `POST /api/chat` escolhe o adapter (`createAnthropicChat` ou `createGeminiChat`) conforme o provedor e chama `chat()` com as tools:
-   - `buscar_documento_northa`
-   - `listar_categorias_northa`
-3. O modelo **consulta a base via tool** antes de responder (mesmo contrato do servidor MCP).
-4. A UI faz streaming SSE e exibe as fontes citadas a partir do resultado da tool.
+O projeto foi desenvolvido com apoio de IA generativa em múltiplas etapas:
 
-Sem chave de API, a plataforma fica **bloqueada** — não há modo offline. É obrigatório configurar uma chave **Claude (Anthropic)** ou **Gemini (Google)** pelo modal na barra lateral, ou via variáveis de ambiente.
+- **Planejamento e escopo** com Claude, em ambiente de agente, para definir o Copiloto, a base Northa e o diferencial MCP.
+- **Implementação do código** no **Cursor**, em modo Agent (incluindo cloud/background agents), de forma majoritariamente conversacional.
+- **MCP Context7** para consultar documentação oficial de bibliotecas (como shadcn/ui e TanStack) durante a geração de código.
+- **MCP Playwright** para verificação visual automatizada das alterações (navegação, captura de tela e inspeção da árvore de elementos) pelo próprio agente.
+- **Better-T-Stack** para o scaffolding inicial do monorepo Turborepo + TanStack Start.
+- **Deploy** via Vercel (preview e produção).
 
-## Como executar
+## Model Context Protocol (MCP) neste projeto
+
+O projeto usa MCP em dois sentidos:
+
+1. **Apoio ao desenvolvimento** — servidores MCP no Cursor (**Context7** e **Playwright**) usados pelo agente para ler documentação e validar a UI.
+2. **Princípio arquitetural do produto** — a busca de documentos (`buscar_documento_northa`) segue a lógica de uma ferramenta MCP: o modelo consulta a base antes de responder. Na interface, essa consulta é tornada visível (Pensando… → anexos em leitura → resposta), para o usuário acompanhar quais documentos estão sendo usados. O mesmo contrato de tools existe no servidor stdio `mcp-server-northa/`.
+
+## Como rodar o projeto localmente
 
 ### 1. Instalar dependências
 
@@ -43,26 +71,7 @@ Sem chave de API, a plataforma fica **bloqueada** — não há modo offline. É 
 bun install
 ```
 
-### 2. Configurar a chave (Claude ou Gemini)
-
-Há duas formas (a chave do navegador tem prioridade no header `x-api-key` + `x-ai-provider`):
-
-1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar Claude ou Gemini** → escolha o provedor, cole a chave e salve.
-2. **Por ambiente:** crie `apps/web/.env.local`:
-
-```bash
-# Gemini (Google)
-GEMINI_API_KEY=sua_chave_aqui
-AI_PROVIDER=gemini
-
-# ou Claude (Anthropic)
-# ANTHROPIC_API_KEY=sua_chave_aqui
-# AI_PROVIDER=anthropic
-```
-
-Há um exemplo em `apps/web/.env.example`.
-
-### 3. Rodar em desenvolvimento
+### 2. Subir o ambiente de desenvolvimento
 
 ```bash
 bun dev
@@ -70,74 +79,58 @@ bun dev
 
 Abra [http://localhost:3001](http://localhost:3001).
 
+> Apenas o app `apps/web`: `bun run dev:web`.
+
+### 3. Configurar a chave de API
+
+Na barra lateral, use o botão **Configurar API KEY**:
+
+1. Escolha o provedor (**Claude** ou **Gemini**).
+2. Cole a chave:
+   - Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+   - Gemini: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+3. Salve.
+
+A chave e o provedor ficam salvos **apenas no `localStorage` do navegador** (`northaAiConfig:v2`) e são enviados nas requisições via headers `x-api-key` e `x-ai-provider`. Não há backend próprio de autenticação.
+
+Opcionalmente, também é possível definir variáveis em `apps/web/.env.local` (veja `apps/web/.env.example`): `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` e `AI_PROVIDER`.
+
 ### 4. Build de produção
 
 ```bash
 bun run build
 ```
 
-## Prints da aplicação
+## Estrutura do projeto
 
-| Tela | Arquivo |
-| --- | --- |
-| Chat / empty state | ![Copiloto Northa](docs/screenshots/copiloto-northa-chat.png) |
-| Configurar chave da API | ![Modal da chave](docs/screenshots/configurar-chave-api.png) |
-| Modal da chave (detalhe) | ![Detalhe do modal](docs/screenshots/modal-chave-api.png) |
-
-## Base de conhecimento
-
-Documentos em `apps/web/src/data/documentos-northa/`:
-
-| Código | Título | Categoria |
-| --- | --- | --- |
-| RH-01 | Política de Férias | RH |
-| RH-02 | Benefícios Corporativos | RH |
-| RH-03 | Home Office e Trabalho Híbrido | RH |
-| TI-01 | Solicitação de Equipamentos | TI |
-| TI-02 | Redefinição de Senha | TI |
-| TI-03 | Acesso VPN | TI |
-| OPS-01 | Acidente de Trabalho | Operações |
-| OPS-02 | Uso de EPI | Operações |
-| COMP-01 | Código de Conduta | Compliance |
-| COMP-02 | Presentes e Brindes | Compliance |
-
-## Servidor MCP (diferencial)
-
-As mesmas tools usadas no `/api/chat` estão expostas via stdio em `mcp-server-northa/` para Claude Desktop / Claude Code:
-
-```bash
-cd mcp-server-northa
-npm install
-npm start
+```text
+.
+├── apps/web/                         # Aplicação TanStack Start (única app executável)
+│   ├── src/
+│   │   ├── components/               # Copiloto, atividade MCP, dialog, tema
+│   │   ├── data/documentos-northa/   # Base de conhecimento (Markdown)
+│   │   ├── lib/                      # Tools, busca, API key, knowledge-base
+│   │   └── routes/                   # UI (/) e API (/api/chat)
+│   └── package.json
+├── packages/
+│   ├── ui/                           # Componentes shadcn/ui compartilhados
+│   ├── env/                          # Validação de variáveis de ambiente
+│   └── config/                       # Config TypeScript compartilhada
+├── mcp-server-northa/                # Servidor MCP stdio (mesmo contrato de tools)
+├── docs/screenshots/                 # Prints usados neste README
+├── scripts/                          # Utilitários (ex.: sync de env Vercel)
+├── turbo.json                        # Pipelines Turborepo
+└── package.json                      # Workspace Bun + scripts raiz
 ```
 
-Veja `mcp-server-northa/README.md` para conectar no Claude Desktop ou Claude Code.
+## Limitações conhecidas
 
-## Deploy na Vercel
+- **Sem controle de acesso por usuário** — qualquer pessoa com a URL pode usar a aplicação; todos os documentos da base são visíveis a quem configurar uma chave.
+- **Chave no navegador** — a chave do usuário fica no `localStorage` e é enviada ao `/api/chat`; não há cofre/backend próprio protegendo o segredo do usuário final.
+- **Dependência de cota dos provedores** — durante o desenvolvimento, tanto a API da Anthropic quanto a do Gemini (nível gratuito) atingiram limites de uso (`429` / `RESOURCE_EXHAUSTED`). Isso pode se repetir para quem testar com chave gratuita. O app usa `gemini-2.5-flash-lite` para reduzir o consumo no Gemini.
+- **Busca textual simples** — a relevância é por sobreposição de termos (`apps/web/src/lib/search.ts`), **sem embeddings vetoriais**.
+- **Base estática e fictícia** — documentos Markdown da Northa; não há banco de dados nem atualização dinâmica.
 
-1. Link do projeto: `bun run deploy:setup`
-2. Defina `GEMINI_API_KEY` ou `ANTHROPIC_API_KEY` (e opcionalmente `AI_PROVIDER`) no painel da Vercel
-3. Preview: `bun run deploy`
-4. Produção: `bun run deploy:prod`
+## Licença / créditos
 
-Configuração em `vercel.json`. Variáveis locais (`.env.local`) **não** sobem automaticamente no deploy.
-
-## Estrutura relevante
-
-```
-apps/web/
-  src/
-    components/copiloto-northa.tsx   # UI + useChat (TanStack AI)
-    data/documentos-northa/          # Base de conhecimento (Markdown)
-    lib/
-      knowledge-base.ts              # Parse e export dos documentos
-      search.ts                      # Retrieval por relevância
-      northa-tools.ts                # Tools MCP (TanStack AI toolDefinition)
-      ai-provider.ts                 # Claude | Gemini (tipos e rótulos)
-      api-key.ts                     # Chave + provedor no localStorage / env
-    routes/
-      index.tsx                      # Rota principal
-      api/chat.ts                    # POST /api/chat (SSE + Anthropic)
-
-mcp-server-northa/                   # Servidor MCP stdio (mesmo contrato de tools)
-```
+Não há arquivo de licença no repositório. Este é um **projeto acadêmico** da disciplina *IA Generativa Aplicada ao Desenvolvimento* (UniFECAF), desenvolvido com apoio de ferramentas de IA generativa conforme descrito acima.
