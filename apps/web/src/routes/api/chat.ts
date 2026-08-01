@@ -36,7 +36,7 @@ export const Route = createFileRoute("/api/chat")({
           return Response.json(
             {
               error:
-                "Chave da API Anthropic não configurada. Use Configurar chave da API na barra lateral ou defina ANTHROPIC_API_KEY no ambiente.",
+                "Chave da API Anthropic obrigatória. Use Configurar chave da API na barra lateral ou defina ANTHROPIC_API_KEY no ambiente.",
             },
             { status: 401 }
           );
