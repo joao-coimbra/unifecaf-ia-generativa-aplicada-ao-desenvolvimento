@@ -14,7 +14,31 @@ import {
 } from "../../lib/northa-tools";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
-const GEMINI_MODEL = "gemini-2.5-flash";
+/** Flash-Lite: menor custo e cota mais generosa no free tier que o Flash. */
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
+
+function mensagemErroIa(error: unknown): string {
+  let raw = "Falha ao processar a conversa com a IA.";
+  if (error instanceof Error) {
+    raw = error.message;
+  } else if (typeof error === "string") {
+    raw = error;
+  }
+
+  const lower = raw.toLowerCase();
+  const isQuota =
+    lower.includes("resource_exhausted") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit") ||
+    lower.includes("429") ||
+    lower.includes("too many requests");
+
+  if (isQuota) {
+    return "Limite da API Gemini atingido (cota/rate limit). Aguarde alguns minutos ou use outra chave. O Copiloto usa o modelo gemini-2.5-flash-lite para reduzir o consumo.";
+  }
+
+  return raw;
+}
 
 function resolveProvider(
   request: Request,
@@ -86,7 +110,11 @@ function criarAdapter(provider: AiProvider, apiKey: string) {
 
 function modelOptionsPara(provider: AiProvider) {
   if (provider === "gemini") {
-    return { maxOutputTokens: 2048 };
+    return {
+      maxOutputTokens: 1536,
+      // Desliga thinking para não consumir tokens extras da cota.
+      thinkingConfig: { thinkingBudget: 0 },
+    };
   }
 
   return { max_tokens: 2048 };
@@ -137,12 +165,13 @@ export const Route = createFileRoute("/api/chat")({
             return error;
           }
 
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Falha ao processar a conversa com a IA.";
+          const message = mensagemErroIa(error);
+          const isQuota = message.includes("Limite da API Gemini");
 
-          return Response.json({ error: message }, { status: 500 });
+          return Response.json(
+            { error: message },
+            { status: isQuota ? 429 : 500 }
+          );
         }
       },
     },

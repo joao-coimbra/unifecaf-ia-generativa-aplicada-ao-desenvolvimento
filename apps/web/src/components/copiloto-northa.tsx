@@ -649,9 +649,25 @@ export function CopilotoNortha() {
   }, [isLoading]);
 
   useEffect(() => {
-    if (error) {
-      toast.error(error.message || "Falha na conexão com a IA.");
+    if (!error) {
+      return;
     }
+
+    const raw = error.message || "Falha na conexão com a IA.";
+    const lower = raw.toLowerCase();
+    const isQuota =
+      lower.includes("resource_exhausted") ||
+      lower.includes("quota") ||
+      lower.includes("rate limit") ||
+      lower.includes("429") ||
+      lower.includes("too many requests") ||
+      lower.includes("limite da api gemini");
+
+    toast.error(
+      isQuota
+        ? "Limite da API Gemini atingido. Aguarde um pouco ou troque a chave — o app já usa gemini-2.5-flash-lite."
+        : raw
+    );
   }, [error]);
 
   const sincronizarFonteChave = useEffectEvent(() => {
