@@ -34,11 +34,6 @@ import {
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/input-group";
 import { Label } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/label";
 import {
-  Marker,
-  MarkerContent,
-  MarkerIcon,
-} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/marker";
-import {
   Message,
   MessageAvatar,
   MessageContent,
@@ -202,30 +197,6 @@ function estaConsultandoBase(message: UIMessage | undefined): boolean {
   );
 }
 
-function deveMostrarConsultando({
-  consultandoBase,
-  digitando,
-  isUltima,
-  isUser,
-  mensagem,
-  texto,
-}: {
-  consultandoBase: boolean;
-  digitando: boolean;
-  isUltima: boolean;
-  isUser: boolean;
-  mensagem: UIMessage;
-  texto: string;
-}): boolean {
-  if (isUser || texto) {
-    return false;
-  }
-
-  const consultando = digitando && isUltima && estaConsultandoBase(mensagem);
-
-  return consultando || (consultandoBase && isUltima);
-}
-
 function PerguntaRapidaButton({
   disabled,
   pergunta,
@@ -252,14 +223,12 @@ function PerguntaRapidaButton({
   );
 }
 
-function IndicadorConsultandoBase() {
+/** Padrão shadcn: texto com utility `shimmer` — sem Spinner/Marker. */
+function StatusShimmer({ children }: { children: string }) {
   return (
-    <Marker role="status">
-      <MarkerIcon>
-        <Spinner />
-      </MarkerIcon>
-      <MarkerContent className="shimmer">Consultando a base…</MarkerContent>
-    </Marker>
+    <span className="shimmer px-3 text-sm" role="status">
+      {children}
+    </span>
   );
 }
 
@@ -598,14 +567,9 @@ function MensagemAiItem({
   const isUser = mensagem.role === "user";
   const texto = textoDaMensagem(mensagem);
   const fontes = fontesDaMensagem(mensagem);
-  const mostrarConsultando = deveMostrarConsultando({
-    consultandoBase,
-    digitando,
-    isUltima,
-    isUser,
-    mensagem,
-    texto,
-  });
+  const mostrandoStatus = !(isUser || texto) && digitando && isUltima;
+  const consultandoNestaMensagem =
+    mostrandoStatus && (consultandoBase || estaConsultandoBase(mensagem));
 
   const handleCopiar = useEffectEvent(async () => {
     try {
@@ -616,18 +580,26 @@ function MensagemAiItem({
     }
   });
 
-  const mostrarRodape = fontes.length > 0 || (!isUser && Boolean(texto));
+  const mostrarRodape = !isUser && Boolean(texto);
 
   return (
-    <MessageScrollerItem messageId={mensagem.id} scrollAnchor={isUser}>
+    <MessageScrollerItem
+      className="[content-visibility:visible]"
+      messageId={mensagem.id}
+      scrollAnchor={isUser}
+    >
       <Message align={isUser ? "end" : "start"}>
         <AvatarDaMensagem iniciais={isUser ? "EU" : "CN"} />
         <MessageContent>
           <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
 
-          {mostrarConsultando ? <IndicadorConsultandoBase /> : null}
+          {mostrandoStatus ? (
+            <StatusShimmer>
+              {consultandoNestaMensagem ? "Consultando a base…" : "Pensando…"}
+            </StatusShimmer>
+          ) : null}
 
-          {!mostrarConsultando && texto ? (
+          {texto ? (
             <Bubble
               align={isUser ? "end" : "start"}
               variant={isUser ? "default" : "muted"}
@@ -638,10 +610,6 @@ function MensagemAiItem({
             </Bubble>
           ) : null}
 
-          {mostrarConsultando || texto || isUser ? null : (
-            <span className="px-3 text-muted-foreground text-sm">…</span>
-          )}
-
           {mostrarRodape ? (
             <MessageFooter className="min-h-8 flex-wrap gap-1.5">
               {fontes.map((fonte) => (
@@ -649,17 +617,15 @@ function MensagemAiItem({
                   {fonte.codigo} · {fonte.titulo}
                 </Badge>
               ))}
-              {!isUser && texto ? (
-                <Button
-                  aria-label="Copiar resposta"
-                  onClick={handleCopiar}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <CopyIcon />
-                </Button>
-              ) : null}
+              <Button
+                aria-label="Copiar resposta"
+                onClick={handleCopiar}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <CopyIcon />
+              </Button>
             </MessageFooter>
           ) : null}
         </MessageContent>
@@ -668,44 +634,19 @@ function MensagemAiItem({
   );
 }
 
-function IndicadorDigitando() {
+/** Placeholder leve enquanto a mensagem do assistente ainda não chegou. */
+function IndicadorPensando() {
   return (
-    <MessageScrollerItem scrollAnchor>
+    <MessageScrollerItem className="[content-visibility:visible]">
       <Message align="start">
         <AvatarDaMensagem iniciais="CN" />
         <MessageContent>
           <MessageHeader>Copiloto</MessageHeader>
-          <Marker role="status">
-            <MarkerIcon>
-              <Spinner />
-            </MarkerIcon>
-            <MarkerContent className="shimmer">Conectando à IA…</MarkerContent>
-          </Marker>
+          <StatusShimmer>Pensando…</StatusShimmer>
         </MessageContent>
       </Message>
     </MessageScrollerItem>
   );
-}
-
-function deveMostrarIndicadorDigitando({
-  consultandoBase,
-  digitando,
-  ultimaAi,
-}: {
-  consultandoBase: boolean;
-  digitando: boolean;
-  ultimaAi: UIMessage | undefined;
-}): boolean {
-  if (!digitando) {
-    return false;
-  }
-
-  if (ultimaAi?.role !== "assistant") {
-    return true;
-  }
-
-  const temTexto = Boolean(textoDaMensagem(ultimaAi));
-  return !(temTexto || consultandoBase);
 }
 
 export function CopilotoNortha() {
@@ -823,11 +764,8 @@ export function CopilotoNortha() {
   const consultandoBase = iaAtiva && estaConsultandoBase(ultimaAi);
   const temMensagens = aiMessages.length > 0;
   const mostrarEmpty = !digitando && aiMessages.length === 0;
-  const mostrarDigitando = deveMostrarIndicadorDigitando({
-    consultandoBase,
-    digitando,
-    ultimaAi,
-  });
+  // Evita item extra com scrollAnchor: só um shimmer leve até o assistant existir.
+  const mostrarPensando = digitando && (!ultimaAi || ultimaAi.role === "user");
 
   return (
     <div className="relative flex h-svh overflow-hidden bg-background">
@@ -930,7 +868,7 @@ export function CopilotoNortha() {
                   />
                 ))}
 
-                {mostrarDigitando ? <IndicadorDigitando /> : null}
+                {mostrarPensando ? <IndicadorPensando /> : null}
 
                 {error && iaAtiva ? (
                   <MessageScrollerItem>
