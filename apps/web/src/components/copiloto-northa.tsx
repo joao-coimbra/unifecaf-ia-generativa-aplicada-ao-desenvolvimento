@@ -1,6 +1,13 @@
 import type { UIMessage } from "@tanstack/ai-react";
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
 import {
+  Attachment,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/attachment";
+import {
   Avatar,
   AvatarFallback,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/avatar";
@@ -65,6 +72,7 @@ import {
 import {
   BotIcon,
   CopyIcon,
+  FileSearchIcon,
   InfoIcon,
   KeyRoundIcon,
   MenuIcon,
@@ -100,12 +108,8 @@ import {
   setStoredConfig,
 } from "../lib/api-key";
 import { type Categoria, categorias } from "../lib/knowledge-base";
+import { AtividadeMcp, documentosLidosDaMensagem } from "./atividade-mcp";
 import { ThemeToggle } from "./theme-toggle";
-
-interface FonteCitada {
-  codigo: string;
-  titulo: string;
-}
 
 const PERGUNTAS_RAPIDAS = [
   "Quantos dias de férias eu tenho?",
@@ -155,33 +159,6 @@ function textoDaMensagem(message: UIMessage): string {
     .trim();
 }
 
-function fontesDaMensagem(message: UIMessage): FonteCitada[] {
-  const fontes: FonteCitada[] = [];
-  const vistos = new Set<string>();
-
-  for (const part of message.parts) {
-    if (part.type !== "tool-call" || part.name !== "buscar_documento_northa") {
-      continue;
-    }
-
-    const output = part.output as
-      | {
-          documentos?: Array<{ codigo?: string; titulo?: string }>;
-        }
-      | undefined;
-
-    for (const doc of output?.documentos ?? []) {
-      if (!(doc.codigo && doc.titulo) || vistos.has(doc.codigo)) {
-        continue;
-      }
-      vistos.add(doc.codigo);
-      fontes.push({ codigo: doc.codigo, titulo: doc.titulo });
-    }
-  }
-
-  return fontes;
-}
-
 function estaConsultandoBase(message: UIMessage | undefined): boolean {
   if (message?.role !== "assistant") {
     return false;
@@ -220,15 +197,6 @@ function PerguntaRapidaButton({
     >
       {pergunta}
     </Button>
-  );
-}
-
-/** Padrão shadcn: texto com utility `shimmer` — sem Spinner/Marker. */
-function StatusShimmer({ children }: { children: string }) {
-  return (
-    <span className="shimmer px-3 text-sm" role="status">
-      {children}
-    </span>
   );
 }
 
@@ -566,10 +534,21 @@ function MensagemAiItem({
 }) {
   const isUser = mensagem.role === "user";
   const texto = textoDaMensagem(mensagem);
-  const fontes = fontesDaMensagem(mensagem);
-  const mostrandoStatus = !(isUser || texto) && digitando && isUltima;
-  const consultandoNestaMensagem =
-    mostrandoStatus && (consultandoBase || estaConsultandoBase(mensagem));
+  const documentos = isUser ? [] : documentosLidosDaMensagem(mensagem);
+  const animarAtividade = !isUser && digitando && isUltima;
+  const consultando =
+    animarAtividade && (consultandoBase || estaConsultandoBase(mensagem));
+  const [leituraCompleta, setLeituraCompleta] = useState(!animarAtividade);
+
+  useEffect(() => {
+    if (!animarAtividade) {
+      setLeituraCompleta(true);
+    }
+  }, [animarAtividade]);
+
+  const handleLeituraCompleta = useEffectEvent((completa: boolean) => {
+    setLeituraCompleta(completa);
+  });
 
   const handleCopiar = useEffectEvent(async () => {
     try {
@@ -580,7 +559,10 @@ function MensagemAiItem({
     }
   });
 
-  const mostrarRodape = !isUser && Boolean(texto);
+  // Resposta só depois da leitura dos arquivos (fluxo típico de chatbot + tools).
+  const podeMostrarResposta =
+    Boolean(texto) &&
+    (documentos.length === 0 || leituraCompleta || !animarAtividade);
 
   return (
     <MessageScrollerItem
@@ -593,13 +575,16 @@ function MensagemAiItem({
         <MessageContent>
           <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
 
-          {mostrandoStatus ? (
-            <StatusShimmer>
-              {consultandoNestaMensagem ? "Consultando a base…" : "Pensando…"}
-            </StatusShimmer>
-          ) : null}
+          {isUser ? null : (
+            <AtividadeMcp
+              animar={animarAtividade}
+              consultando={consultando}
+              documentos={documentos}
+              onLeituraCompleta={handleLeituraCompleta}
+            />
+          )}
 
-          {texto ? (
+          {podeMostrarResposta ? (
             <Bubble
               align={isUser ? "end" : "start"}
               variant={isUser ? "default" : "muted"}
@@ -610,13 +595,8 @@ function MensagemAiItem({
             </Bubble>
           ) : null}
 
-          {mostrarRodape ? (
-            <MessageFooter className="min-h-8 flex-wrap gap-1.5">
-              {fontes.map((fonte) => (
-                <Badge key={fonte.codigo} variant="outline">
-                  {fonte.codigo} · {fonte.titulo}
-                </Badge>
-              ))}
+          {podeMostrarResposta && !isUser ? (
+            <MessageFooter className="min-h-8">
               <Button
                 aria-label="Copiar resposta"
                 onClick={handleCopiar}
@@ -634,7 +614,7 @@ function MensagemAiItem({
   );
 }
 
-/** Placeholder leve enquanto a mensagem do assistente ainda não chegou. */
+/** Placeholder enquanto a mensagem do assistente ainda não chegou. */
 function IndicadorPensando() {
   return (
     <MessageScrollerItem className="[content-visibility:visible]">
@@ -642,7 +622,17 @@ function IndicadorPensando() {
         <AvatarDaMensagem iniciais="CN" />
         <MessageContent>
           <MessageHeader>Copiloto</MessageHeader>
-          <StatusShimmer>Pensando…</StatusShimmer>
+          <Attachment className="w-full max-w-md" size="sm" state="processing">
+            <AttachmentMedia>
+              <FileSearchIcon />
+            </AttachmentMedia>
+            <AttachmentContent>
+              <AttachmentTitle>Pensando…</AttachmentTitle>
+              <AttachmentDescription>
+                Preparando consulta à base Northa
+              </AttachmentDescription>
+            </AttachmentContent>
+          </Attachment>
         </MessageContent>
       </Message>
     </MessageScrollerItem>
