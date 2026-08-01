@@ -76,12 +76,21 @@ import {
 import { toast } from "sonner";
 
 import {
+  type AiProvider,
+  placeholderChave,
+  rotuloConsoleProvedor,
+  rotuloProvedor,
+  urlConsoleProvedor,
+} from "../lib/ai-provider";
+import {
   type ApiKeySource,
-  clearStoredApiKey,
+  clearStoredConfig,
+  getActiveProvider,
   getApiKeySource,
   getChatAuthHeaders,
   getStoredApiKey,
-  setStoredApiKey,
+  getStoredProvider,
+  setStoredConfig,
 } from "../lib/api-key";
 import { type Categoria, categorias } from "../lib/knowledge-base";
 
@@ -111,24 +120,21 @@ const CATEGORIA_VARIANT: Record<
 
 const BOLD_MARKDOWN_REGEX = /\*\*(.*?)\*\*/g;
 
-function rotuloFonte(fonte: ApiKeySource): string {
+function rotuloFonte(fonte: ApiKeySource, provider: AiProvider | null): string {
+  if (fonte === "none" || !provider) {
+    return "Chave de API necessária";
+  }
   if (fonte === "local") {
-    return "IA conectada (sua chave)";
+    return `${rotuloProvedor(provider)} · sua chave`;
   }
-  if (fonte === "env") {
-    return "IA conectada (ambiente)";
-  }
-  return "Chave de API necessária";
+  return `${rotuloProvedor(provider)} · ambiente`;
 }
 
-function rotuloBadge(fonte: ApiKeySource): string {
-  if (fonte === "local") {
-    return "Sua chave ativa";
+function rotuloBadge(fonte: ApiKeySource, provider: AiProvider | null): string {
+  if (fonte === "none" || !provider) {
+    return "Sem chave de API";
   }
-  if (fonte === "env") {
-    return "Anthropic ativa";
-  }
-  return "Sem chave de API";
+  return provider === "anthropic" ? "Claude ativo" : "Gemini ativo";
 }
 
 function textoDaMensagem(message: UIMessage): string {
@@ -209,6 +215,32 @@ function PerguntaRapidaButton({
   );
 }
 
+function ProvedorOptionButton({
+  ativo,
+  label,
+  provider,
+  onSelect,
+}: {
+  ativo: boolean;
+  label: string;
+  provider: AiProvider;
+  onSelect: (provider: AiProvider) => void;
+}) {
+  const handleClick = useEffectEvent(() => {
+    onSelect(provider);
+  });
+
+  return (
+    <Button
+      onClick={handleClick}
+      type="button"
+      variant={ativo ? "default" : "outline"}
+    >
+      {label}
+    </Button>
+  );
+}
+
 function ApiKeyDialog({
   onSaved,
   open,
@@ -218,11 +250,13 @@ function ApiKeyDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [provedor, setProvedor] = useState<AiProvider>("gemini");
   const [rascunho, setRascunho] = useState("");
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
+      setProvedor(getStoredProvider() ?? getActiveProvider() ?? "gemini");
       setRascunho(getStoredApiKey() ?? "");
       setMensagem(null);
     }
@@ -232,19 +266,21 @@ function ApiKeyDialog({
     event.preventDefault();
     const valor = rascunho.trim();
     if (!valor) {
-      setMensagem("Cole uma chave válida da Anthropic.");
+      setMensagem(`Cole uma chave válida de ${rotuloProvedor(provedor)}.`);
       return;
     }
 
-    setStoredApiKey(valor);
+    setStoredConfig(provedor, valor);
     setMensagem("Chave salva neste navegador.");
     onSaved();
     onOpenChange(false);
-    toast.success("Chave da API salva — plataforma liberada.");
+    toast.success(
+      `${rotuloProvedor(provedor)} conectado — plataforma liberada.`
+    );
   });
 
   const handleRemover = useEffectEvent(() => {
-    clearStoredApiKey();
+    clearStoredConfig();
     setRascunho("");
     setMensagem("Chave removida.");
     onSaved();
@@ -258,27 +294,51 @@ function ApiKeyDialog({
     }
   );
 
+  const handleProvedorChange = useEffectEvent((proximo: AiProvider) => {
+    setProvedor(proximo);
+    setMensagem(null);
+  });
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Chave da API Anthropic</DialogTitle>
+          <DialogTitle>Configurar provedor de IA</DialogTitle>
           <DialogDescription>
-            Uma chave da API é obrigatória para usar o Copiloto Northa. Cole sua
-            chave para ativar o fluxo TanStack AI (`/api/chat`) com as
-            ferramentas MCP da base Northa. Ela fica salva neste navegador e é
-            enviada ao servidor da aplicação (não fica embutida no código).
+            Escolha Claude (Anthropic) ou Gemini (Google) e cole a chave
+            correspondente. Ela fica salva neste navegador e é enviada ao
+            servidor da aplicação (não fica embutida no código).
           </DialogDescription>
         </DialogHeader>
 
         <form className="flex flex-col gap-3" onSubmit={handleSalvar}>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="anthropic-api-key">Chave da API</Label>
+            <Label>Provedor</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <ProvedorOptionButton
+                ativo={provedor === "anthropic"}
+                label="Claude"
+                onSelect={handleProvedorChange}
+                provider="anthropic"
+              />
+              <ProvedorOptionButton
+                ativo={provedor === "gemini"}
+                label="Gemini"
+                onSelect={handleProvedorChange}
+                provider="gemini"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="ai-api-key">
+              Chave da API · {rotuloProvedor(provedor)}
+            </Label>
             <Input
               autoComplete="off"
-              id="anthropic-api-key"
+              id="ai-api-key"
               onChange={handleRascunhoChange}
-              placeholder="sk-ant-..."
+              placeholder={placeholderChave(provedor)}
               spellCheck={false}
               type="password"
               value={rascunho}
@@ -290,11 +350,11 @@ function ApiKeyDialog({
                 Obtenha a chave em{" "}
                 <a
                   className="underline underline-offset-2"
-                  href="https://console.anthropic.com/"
+                  href={urlConsoleProvedor(provedor)}
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  console.anthropic.com
+                  {rotuloConsoleProvedor(provedor)}
                 </a>
                 .
               </p>
@@ -305,7 +365,7 @@ function ApiKeyDialog({
             <Button onClick={handleRemover} type="button" variant="outline">
               Remover chave
             </Button>
-            <Button type="submit">Salvar chave</Button>
+            <Button type="submit">Salvar e conectar</Button>
           </div>
         </form>
       </DialogContent>
@@ -315,10 +375,12 @@ function ApiKeyDialog({
 
 function SidebarContent({
   fonteChave,
+  provedor,
   onPerguntaRapida,
   onConfigurarChave,
 }: {
   fonteChave: ApiKeySource;
+  provedor: AiProvider | null;
   onPerguntaRapida: (pergunta: string) => void;
   onConfigurarChave: () => void;
 }) {
@@ -342,7 +404,7 @@ function SidebarContent({
         </div>
 
         <Badge variant={iaAtiva ? "default" : "outline"}>
-          {rotuloFonte(fonteChave)}
+          {rotuloFonte(fonteChave, provedor)}
         </Badge>
       </div>
 
@@ -383,7 +445,7 @@ function SidebarContent({
           variant="ghost"
         >
           <KeyRoundIcon data-icon="inline-start" />
-          Configurar chave da API
+          Configurar Claude ou Gemini
         </Button>
 
         <Dialog>
@@ -399,10 +461,10 @@ function SidebarContent({
               <DialogDescription>
                 Aplicação acadêmica da disciplina IA Generativa Aplicada ao
                 Desenvolvimento (UniFECAF). O chat usa TanStack AI (`useChat` +
-                SSE) com Anthropic e ferramentas equivalentes ao MCP
+                SSE) com Claude ou Gemini e ferramentas equivalentes ao MCP
                 (`buscar_documento_northa`) sobre a base interna. É necessário
-                configurar uma chave da API Anthropic para utilizar a
-                plataforma.
+                configurar uma chave de API (Anthropic ou Google) para utilizar
+                a plataforma.
               </DialogDescription>
             </DialogHeader>
           </DialogContent>
@@ -472,13 +534,14 @@ function EmptyState({
         </EmptyMedia>
         <EmptyTitle>Chave de API necessária</EmptyTitle>
         <EmptyDescription>
-          Para utilizar o Copiloto Northa, configure uma chave da API Anthropic.
-          Sem ela, a plataforma permanece bloqueada — não há modo offline.
+          Para utilizar o Copiloto Northa, configure uma chave Claude
+          (Anthropic) ou Gemini (Google). Sem chave, a plataforma permanece
+          bloqueada — não há modo offline.
         </EmptyDescription>
       </EmptyHeader>
       <Button className="mt-2" onClick={onConfigurarChave} type="button">
         <KeyRoundIcon data-icon="inline-start" />
-        Configurar chave da API
+        Configurar Claude ou Gemini
       </Button>
     </Empty>
   );
@@ -624,6 +687,7 @@ export function CopilotoNortha() {
   const [entrada, setEntrada] = useState("");
   const [sidebarAberta, setSidebarAberta] = useState(false);
   const [fonteChave, setFonteChave] = useState<ApiKeySource>("none");
+  const [provedor, setProvedor] = useState<AiProvider | null>(null);
   const [dialogChaveAberto, setDialogChaveAberto] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const entradaRef = useRef(entrada);
@@ -643,12 +707,16 @@ export function CopilotoNortha() {
     connection: fetchServerSentEvents("/api/chat", () => ({
       headers: getChatAuthHeaders(),
     })),
+    forwardedProps: {
+      provider: provedor ?? "gemini",
+    },
   });
 
   isLoadingRef.current = isLoading;
 
   useEffect(() => {
     setFonteChave(getApiKeySource());
+    setProvedor(getActiveProvider());
   }, []);
 
   useEffect(() => {
@@ -665,7 +733,9 @@ export function CopilotoNortha() {
 
   const sincronizarFonteChave = useEffectEvent(() => {
     const proxima = getApiKeySource();
+    const proximoProvedor = getActiveProvider();
     setFonteChave(proxima);
+    setProvedor(proximoProvedor);
     if (proxima === "none") {
       clear();
     }
@@ -747,6 +817,7 @@ export function CopilotoNortha() {
           fonteChave={fonteChave}
           onConfigurarChave={abrirConfiguracaoChave}
           onPerguntaRapida={handlePerguntaRapida}
+          provedor={provedor}
         />
       </aside>
 
@@ -774,6 +845,7 @@ export function CopilotoNortha() {
                   fonteChave={fonteChave}
                   onConfigurarChave={abrirConfiguracaoChave}
                   onPerguntaRapida={handlePerguntaRapida}
+                  provedor={provedor}
                 />
               </SheetContent>
             </Sheet>
@@ -795,7 +867,7 @@ export function CopilotoNortha() {
               </Button>
             ) : null}
             <Badge variant={iaAtiva ? "default" : "outline"}>
-              {rotuloBadge(fonteChave)}
+              {rotuloBadge(fonteChave, provedor)}
             </Badge>
           </div>
         </header>

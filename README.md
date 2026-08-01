@@ -11,6 +11,7 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 - **TanStack Start** — app React com Vite e SSR
 - **TanStack AI** — `useChat` + SSE (`fetchServerSentEvents`) + `chat()` no servidor
 - **@tanstack/ai-anthropic** — adapter Anthropic (Claude)
+- **@tanstack/ai-gemini** — adapter Google Gemini
 - **React 19** + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui**
 - **Bun** — runtime e gerenciador de pacotes
@@ -20,19 +21,19 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 | Contexto | Ferramentas |
 | --- | --- |
 | Desenvolvimento | Cursor + Claude (geração de código, refino de prompts, estruturação do monorepo) |
-| Aplicação | TanStack AI + Anthropic (`claude-sonnet-4-6`) com tools isomórficas ao MCP |
+| Aplicação | TanStack AI + Claude (`claude-sonnet-4-6`) **ou** Gemini (`gemini-2.5-flash`) com tools isomórficas ao MCP |
 | Diferencial MCP | Servidor MCP em `mcp-server-northa/` + mesmas tools no `/api/chat` |
 
 ## Fluxo de perguntas (TanStack AI)
 
 1. O client usa `useChat` + `fetchServerSentEvents("/api/chat")` (mesmo padrão do helper [shadcn TanStack AI](https://ui.shadcn.com/docs/helpers/tanstack-ai), porém com conexão real à API).
-2. A rota `POST /api/chat` chama `chat()` com `createAnthropicChat` e as tools:
+2. A rota `POST /api/chat` escolhe o adapter (`createAnthropicChat` ou `createGeminiChat`) conforme o provedor e chama `chat()` com as tools:
    - `buscar_documento_northa`
    - `listar_categorias_northa`
 3. O modelo **consulta a base via tool** antes de responder (mesmo contrato do servidor MCP).
 4. A UI faz streaming SSE e exibe as fontes citadas a partir do resultado da tool.
 
-Sem chave de API, a plataforma fica **bloqueada** — não há modo offline. É obrigatório configurar uma chave da Anthropic (pelo modal na barra lateral ou via `ANTHROPIC_API_KEY` no ambiente).
+Sem chave de API, a plataforma fica **bloqueada** — não há modo offline. É obrigatório configurar uma chave **Claude (Anthropic)** ou **Gemini (Google)** pelo modal na barra lateral, ou via variáveis de ambiente.
 
 ## Como executar
 
@@ -42,17 +43,21 @@ Sem chave de API, a plataforma fica **bloqueada** — não há modo offline. É 
 bun install
 ```
 
-### 2. Configurar a chave da Anthropic
+### 2. Configurar a chave (Claude ou Gemini)
 
-Há duas formas (a chave do navegador tem prioridade no header `x-api-key`):
+Há duas formas (a chave do navegador tem prioridade no header `x-api-key` + `x-ai-provider`):
 
-1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar chave da API** → cole a chave e salve.
+1. **Pelo app (recomendado para demonstração):** na barra lateral, botão **Configurar Claude ou Gemini** → escolha o provedor, cole a chave e salve.
 2. **Por ambiente:** crie `apps/web/.env.local`:
 
 ```bash
-ANTHROPIC_API_KEY=sua_chave_aqui
-# opcional / compatibilidade com o client:
-VITE_ANTHROPIC_API_KEY=sua_chave_aqui
+# Gemini (Google)
+GEMINI_API_KEY=sua_chave_aqui
+AI_PROVIDER=gemini
+
+# ou Claude (Anthropic)
+# ANTHROPIC_API_KEY=sua_chave_aqui
+# AI_PROVIDER=anthropic
 ```
 
 Há um exemplo em `apps/web/.env.example`.
@@ -111,7 +116,7 @@ Veja `mcp-server-northa/README.md` para conectar no Claude Desktop ou Claude Cod
 ## Deploy na Vercel
 
 1. Link do projeto: `bun run deploy:setup`
-2. Defina `ANTHROPIC_API_KEY` (e opcionalmente `VITE_ANTHROPIC_API_KEY`) no painel da Vercel
+2. Defina `GEMINI_API_KEY` ou `ANTHROPIC_API_KEY` (e opcionalmente `AI_PROVIDER`) no painel da Vercel
 3. Preview: `bun run deploy`
 4. Produção: `bun run deploy:prod`
 
@@ -128,7 +133,8 @@ apps/web/
       knowledge-base.ts              # Parse e export dos documentos
       search.ts                      # Retrieval por relevância
       northa-tools.ts                # Tools MCP (TanStack AI toolDefinition)
-      api-key.ts                     # Chave no localStorage / env (obrigatória)
+      ai-provider.ts                 # Claude | Gemini (tipos e rótulos)
+      api-key.ts                     # Chave + provedor no localStorage / env
     routes/
       index.tsx                      # Rota principal
       api/chat.ts                    # POST /api/chat (SSE + Anthropic)
