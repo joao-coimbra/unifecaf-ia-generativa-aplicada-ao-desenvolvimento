@@ -32,7 +32,7 @@ Aplicação acadêmica da disciplina **IA Generativa Aplicada ao Desenvolvimento
 3. O modelo **consulta a base via tool** antes de responder (mesmo contrato do servidor MCP).
 4. A UI faz streaming SSE e exibe as fontes citadas a partir do resultado da tool.
 
-Sem chave de API, o app fica em **modo offline explícito** (só retrieval local, sem geração por IA).
+A **chave da API Anthropic é obrigatória**. Sem ela, o chat fica bloqueado até a configuração.
 
 ## Como executar
 
@@ -42,7 +42,7 @@ Sem chave de API, o app fica em **modo offline explícito** (só retrieval local
 bun install
 ```
 
-### 2. Configurar a chave da Anthropic
+### 2. Configurar a chave da Anthropic (obrigatório)
 
 Há duas formas (a chave do navegador tem prioridade no header `x-api-key`):
 
@@ -55,7 +55,7 @@ ANTHROPIC_API_KEY=sua_chave_aqui
 VITE_ANTHROPIC_API_KEY=sua_chave_aqui
 ```
 
-Há um exemplo em `apps/web/.env.example`.
+Há um exemplo em `apps/web/.env.example`. Sem chave, o envio de perguntas permanece desabilitado.
 
 ### 3. Rodar em desenvolvimento
 
@@ -128,8 +128,7 @@ apps/web/
       knowledge-base.ts              # Parse e export dos documentos
       search.ts                      # Retrieval por relevância
       northa-tools.ts                # Tools MCP (TanStack AI toolDefinition)
-      ai.ts                          # Fallback offline (sem IA)
-      api-key.ts                     # Chave no localStorage / env
+      api-key.ts                     # Chave no localStorage / env (obrigatória)
     routes/
       index.tsx                      # Rota principal
       api/chat.ts                    # POST /api/chat (SSE + Anthropic)
