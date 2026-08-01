@@ -73,12 +73,16 @@ import {
 import {
   type ChangeEvent,
   type FormEvent,
+  useDeferredValue,
   useEffect,
   useEffectEvent,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
+
+/** Pausa mínima antes de revelar a bolha de resposta (após MCP / thinking). */
+const DELAY_REVELAR_RESPOSTA_MS = 280;
 
 import {
   type AiProvider,
@@ -197,9 +201,9 @@ function PerguntaRapidaButton({
  */
 function AvatarDaMensagem({ isUser }: { isUser: boolean }) {
   return (
-    <MessageAvatar className="self-start group-has-data-[slot=message-footer]/message:translate-y-0">
+    <MessageAvatar className="mt-0.5 self-start ring-1 ring-border/60 group-has-data-[slot=message-footer]/message:translate-y-0">
       <Avatar aria-label={isUser ? "Você" : "Copiloto Northa"}>
-        <AvatarFallback className="[&>svg]:size-4">
+        <AvatarFallback className="bg-muted/80 text-xs [&>svg]:size-4">
           {isUser ? "EU" : <BotIcon />}
         </AvatarFallback>
       </Avatar>
@@ -450,15 +454,20 @@ function SidebarContent({
 }
 
 function ConteudoMensagem({ content }: { content: string }) {
+  const linhas = content.split("\n");
+
   return (
-    <div className="whitespace-pre-wrap text-sm leading-relaxed">
-      {content.split("\n").map((linha, index) => {
-        const key = `${index}-${linha.slice(0, 12)}`;
+    <div className="flex flex-col gap-1.5 whitespace-pre-wrap text-sm leading-relaxed">
+      {linhas.map((linha, index) => {
+        const key = `${index}-${linha.slice(0, 24)}`;
         const negrito = linha.replace(BOLD_MARKDOWN_REGEX, "$1");
         const temNegrito = linha.includes("**");
 
         return (
-          <p className={temNegrito ? "font-medium" : undefined} key={key}>
+          <p
+            className={temNegrito ? "font-medium text-foreground" : undefined}
+            key={key}
+          >
             {negrito || "\u00A0"}
           </p>
         );
@@ -513,6 +522,82 @@ function EmptyState({
   );
 }
 
+function useRespostaVisivel(respostaPronta: boolean, comDelay: boolean) {
+  const [visivel, setVisivel] = useState(respostaPronta && !comDelay);
+
+  useEffect(() => {
+    if (!respostaPronta) {
+      setVisivel(false);
+      return;
+    }
+
+    if (!comDelay) {
+      setVisivel(true);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setVisivel(true);
+    }, DELAY_REVELAR_RESPOSTA_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [comDelay, respostaPronta]);
+
+  return visivel;
+}
+
+function BolhaDaMensagem({
+  content,
+  isUser,
+  onCopiar,
+  mostrarCopiar,
+}: {
+  content: string;
+  isUser: boolean;
+  onCopiar: () => void;
+  mostrarCopiar: boolean;
+}) {
+  return (
+    <>
+      <Bubble
+        align={isUser ? "end" : "start"}
+        className={
+          isUser
+            ? "chat-reply-enter max-w-[min(100%,34rem)]"
+            : "chat-reply-enter max-w-[min(100%,40rem)]"
+        }
+        variant={isUser ? "default" : "muted"}
+      >
+        <BubbleContent
+          className={
+            isUser
+              ? "rounded-2xl rounded-tr-md px-3.5 py-2.5 shadow-sm"
+              : "rounded-2xl rounded-tl-md border-border/60 px-3.5 py-2.5 shadow-sm"
+          }
+        >
+          <ConteudoMensagem content={content} />
+        </BubbleContent>
+      </Bubble>
+
+      {mostrarCopiar ? (
+        <div className="chat-status-enter flex items-center px-0.5">
+          <Button
+            aria-label="Copiar resposta"
+            onClick={onCopiar}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <CopyIcon />
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function MensagemAiItem({
   consultandoBase,
   digitando,
@@ -526,6 +611,7 @@ function MensagemAiItem({
 }) {
   const isUser = mensagem.role === "user";
   const texto = textoDaMensagem(mensagem);
+  const textoSuave = useDeferredValue(texto);
   const documentos = isUser ? [] : documentosLidosDaMensagem(mensagem);
   const animarAtividade = !isUser && digitando && isUltima;
   const consultando =
@@ -551,21 +637,25 @@ function MensagemAiItem({
     }
   });
 
-  // Resposta só depois da leitura dos arquivos (fluxo típico de chatbot + tools).
-  const podeMostrarResposta =
-    Boolean(texto) &&
-    (documentos.length === 0 || leituraCompleta || !animarAtividade);
+  // Resposta só depois do ritmo de Pensando/MCP — evita flash da bolha cedo demais.
+  const respostaPronta =
+    Boolean(texto) && (!animarAtividade || leituraCompleta);
+  const respostaVisivel = useRespostaVisivel(respostaPronta, animarAtividade);
+  const podeMostrarResposta = respostaPronta && respostaVisivel;
+  const textoExibido = !isUser && digitando && isUltima ? textoSuave : texto;
 
   return (
     <MessageScrollerItem
-      className="[contain-intrinsic-size:none] [content-visibility:visible]"
+      className="chat-message-enter [contain-intrinsic-size:none] [content-visibility:visible]"
       messageId={mensagem.id}
       scrollAnchor={isUser}
     >
-      <Message align={isUser ? "end" : "start"}>
+      <Message align={isUser ? "end" : "start"} className="items-start gap-3">
         <AvatarDaMensagem isUser={isUser} />
-        <MessageContent>
-          <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
+        <MessageContent className="gap-2">
+          <MessageHeader className="px-1 font-medium tracking-wide">
+            {isUser ? "Você" : "Copiloto"}
+          </MessageHeader>
 
           {isUser ? null : (
             <AtividadeMcp
@@ -577,28 +667,12 @@ function MensagemAiItem({
           )}
 
           {podeMostrarResposta ? (
-            <Bubble
-              align={isUser ? "end" : "start"}
-              variant={isUser ? "default" : "muted"}
-            >
-              <BubbleContent>
-                <ConteudoMensagem content={texto} />
-              </BubbleContent>
-            </Bubble>
-          ) : null}
-
-          {podeMostrarResposta && !isUser ? (
-            <div className="flex items-center px-1">
-              <Button
-                aria-label="Copiar resposta"
-                onClick={handleCopiar}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <CopyIcon />
-              </Button>
-            </div>
+            <BolhaDaMensagem
+              content={textoExibido}
+              isUser={isUser}
+              mostrarCopiar={!isUser}
+              onCopiar={handleCopiar}
+            />
           ) : null}
         </MessageContent>
       </Message>
@@ -802,12 +876,12 @@ export function CopilotoNortha() {
 
         <MessageScrollerProvider autoScroll defaultScrollPosition="end">
           <MessageScroller className="min-h-0 flex-1">
-            <MessageScrollerViewport>
+            <MessageScrollerViewport className="scroll-smooth">
               <MessageScrollerContent
                 className={
                   mostrarEmpty
-                    ? "mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center gap-0 px-4 py-6"
-                    : "mx-auto w-full max-w-3xl gap-6 px-4 py-6"
+                    ? "mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center gap-0 px-4 py-8"
+                    : "mx-auto w-full max-w-3xl gap-7 px-4 py-8"
                 }
               >
                 {mostrarEmpty ? (
