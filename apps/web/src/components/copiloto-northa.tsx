@@ -84,6 +84,7 @@ import { toast } from "sonner";
 /** Pausa mínima antes de revelar a bolha de resposta (após MCP / thinking). */
 const DELAY_REVELAR_RESPOSTA_MS = 280;
 
+import { formatarErroIa } from "../lib/ai-errors";
 import {
   type AiProvider,
   isAiProvider,
@@ -723,9 +724,10 @@ export function CopilotoNortha() {
   }, [isLoading]);
 
   useEffect(() => {
-    if (error) {
-      toast.error(error.message || "Falha na conexão com a IA.");
+    if (!error) {
+      return;
     }
+    toast.error(formatarErroIa(error.message || error));
   }, [error]);
 
   const sincronizarFonteChave = useEffectEvent(() => {
@@ -906,7 +908,7 @@ export function CopilotoNortha() {
                 {error && iaAtiva ? (
                   <MessageScrollerItem>
                     <p className="text-destructive text-sm" role="alert">
-                      Erro na IA: {error.message}
+                      {formatarErroIa(error.message || error)}
                     </p>
                   </MessageScrollerItem>
                 ) : null}

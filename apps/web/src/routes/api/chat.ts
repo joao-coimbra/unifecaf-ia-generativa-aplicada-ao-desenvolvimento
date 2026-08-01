@@ -7,6 +7,7 @@ import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { formatarErroIa } from "../../lib/ai-errors";
 import { type AiProvider, isAiProvider } from "../../lib/ai-provider";
 import {
   northaServerTools,
@@ -14,7 +15,10 @@ import {
 } from "../../lib/northa-tools";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
-const GEMINI_MODEL = "gemini-2.5-flash";
+/**
+ * Flash-Lite: cota free-tier separada do `gemini-2.5-flash` (que estoura em ~20 req/dia).
+ */
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 function resolveProvider(
   request: Request,
@@ -86,7 +90,10 @@ function criarAdapter(provider: AiProvider, apiKey: string) {
 
 function modelOptionsPara(provider: AiProvider) {
   if (provider === "gemini") {
-    return { maxOutputTokens: 2048 };
+    return {
+      maxOutputTokens: 1536,
+      thinkingConfig: { thinkingBudget: 0 },
+    };
   }
 
   return { max_tokens: 2048 };
@@ -137,12 +144,13 @@ export const Route = createFileRoute("/api/chat")({
             return error;
           }
 
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Falha ao processar a conversa com a IA.";
+          const message = formatarErroIa(error);
+          const isQuota = message.includes("Limite da API Gemini");
 
-          return Response.json({ error: message }, { status: 500 });
+          return Response.json(
+            { error: message },
+            { status: isQuota ? 429 : 500 }
+          );
         }
       },
     },
