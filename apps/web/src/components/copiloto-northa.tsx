@@ -74,7 +74,6 @@ import {
   KeyRoundIcon,
   MenuIcon,
   SendIcon,
-  UserIcon,
   WarehouseIcon,
 } from "lucide-react";
 import {
@@ -261,6 +260,21 @@ function IndicadorConsultandoBase() {
       </MarkerIcon>
       <MarkerContent className="shimmer">Consultando a base…</MarkerContent>
     </Marker>
+  );
+}
+
+/**
+ * Padrão oficial shadcn Message:
+ * MessageAvatar > Avatar (size default = 32px) > AvatarFallback com iniciais.
+ * Não usar size="sm" (desalinha o slot min-w-8) nem ícones no Fallback.
+ */
+function AvatarDaMensagem({ iniciais }: { iniciais: string }) {
+  return (
+    <MessageAvatar>
+      <Avatar>
+        <AvatarFallback>{iniciais}</AvatarFallback>
+      </Avatar>
+    </MessageAvatar>
   );
 }
 
@@ -477,7 +491,7 @@ function SidebarContent({
           variant="ghost"
         >
           <KeyRoundIcon data-icon="inline-start" />
-          Configurar Claude ou Gemini
+          Configurar API KEY
         </Button>
 
         <Dialog>
@@ -564,7 +578,7 @@ function EmptyState({
       </EmptyHeader>
       <Button className="mt-2" onClick={onConfigurarChave} type="button">
         <KeyRoundIcon data-icon="inline-start" />
-        Configurar Claude ou Gemini
+        Configurar API KEY
       </Button>
     </Empty>
   );
@@ -607,13 +621,7 @@ function MensagemAiItem({
   return (
     <MessageScrollerItem messageId={mensagem.id} scrollAnchor={isUser}>
       <Message align={isUser ? "end" : "start"}>
-        <MessageAvatar>
-          <Avatar size="sm">
-            <AvatarFallback>
-              {isUser ? <UserIcon /> : <BotIcon />}
-            </AvatarFallback>
-          </Avatar>
-        </MessageAvatar>
+        <AvatarDaMensagem iniciais={isUser ? "EU" : "CN"} />
         <MessageContent>
           <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
 
@@ -622,7 +630,7 @@ function MensagemAiItem({
           {!mostrarConsultando && texto ? (
             <Bubble
               align={isUser ? "end" : "start"}
-              variant={isUser ? "default" : "tinted"}
+              variant={isUser ? "default" : "muted"}
             >
               <BubbleContent>
                 <ConteudoMensagem content={texto} />
@@ -635,7 +643,7 @@ function MensagemAiItem({
           )}
 
           {mostrarRodape ? (
-            <MessageFooter className="flex flex-wrap items-center gap-1.5">
+            <MessageFooter className="min-h-8 flex-wrap gap-1.5">
               {fontes.map((fonte) => (
                 <Badge key={fonte.codigo} variant="outline">
                   {fonte.codigo} · {fonte.titulo}
@@ -664,13 +672,7 @@ function IndicadorDigitando() {
   return (
     <MessageScrollerItem scrollAnchor>
       <Message align="start">
-        <MessageAvatar>
-          <Avatar size="sm">
-            <AvatarFallback>
-              <BotIcon />
-            </AvatarFallback>
-          </Avatar>
-        </MessageAvatar>
+        <AvatarDaMensagem iniciais="CN" />
         <MessageContent>
           <MessageHeader>Copiloto</MessageHeader>
           <Marker role="status">
@@ -828,14 +830,23 @@ export function CopilotoNortha() {
   });
 
   return (
-    <div className="flex h-svh overflow-hidden bg-[radial-gradient(ellipse_at_top,oklch(from_var(--primary)_0.97_calc(c*0.15)_h)_0%,transparent_55%)] bg-background">
+    <div className="relative flex h-svh overflow-hidden bg-background">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_12%_8%,oklch(from_var(--primary)_l_c_h/0.14),transparent_55%),radial-gradient(ellipse_70%_50%_at_88%_12%,oklch(from_var(--accent)_l_c_h/0.18),transparent_50%),radial-gradient(ellipse_90%_55%_at_50%_100%,oklch(from_var(--muted-foreground)_l_c_h/0.10),transparent_55%)]"
+      />
+      <div
+        aria-hidden
+        className="mask-[radial-gradient(ellipse_at_center,black_35%,transparent_80%)] pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,oklch(from_var(--foreground)_l_c_h/0.16)_1px,transparent_0)] bg-size-[20px_20px] opacity-[0.5] dark:opacity-[0.32]"
+      />
+
       <ApiKeyDialog
         onOpenChange={setDialogChaveAberto}
         onSaved={sincronizarFonteChave}
         open={dialogChaveAberto}
       />
 
-      <aside className="hidden w-80 shrink-0 border-border/80 border-r bg-sidebar p-4 md:flex md:flex-col">
+      <aside className="relative z-10 hidden w-80 shrink-0 border-border/80 border-r bg-sidebar/90 p-4 backdrop-blur-md md:flex md:flex-col">
         <SidebarContent
           fonteChave={fonteChave}
           onConfigurarChave={abrirConfiguracaoChave}
@@ -844,8 +855,8 @@ export function CopilotoNortha() {
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-border/80 border-b bg-background/80 px-4 py-3 backdrop-blur">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 border-border/80 border-b bg-background/75 px-4 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <Sheet onOpenChange={setSidebarAberta} open={sidebarAberta}>
               <SheetTrigger
@@ -934,7 +945,7 @@ export function CopilotoNortha() {
           </MessageScroller>
         </MessageScrollerProvider>
 
-        <footer className="border-border/80 border-t bg-background/90 p-4 backdrop-blur">
+        <footer className="border-border/80 border-t bg-background/75 p-4 backdrop-blur-md">
           <form className="mx-auto w-full max-w-3xl" onSubmit={handleSubmit}>
             <InputGroup className="h-11">
               <InputGroupInput
