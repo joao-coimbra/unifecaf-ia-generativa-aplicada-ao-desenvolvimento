@@ -26,7 +26,7 @@ function extrairTextoAninhado(valor: unknown, profundidade = 0): string {
   }
 
   const obj = valor as Record<string, unknown>;
-  if (obj.error != null) {
+  if (obj.error !== undefined && obj.error !== null) {
     return extrairTextoAninhado(obj.error, profundidade + 1);
   }
   if (typeof obj.message === "string") {
