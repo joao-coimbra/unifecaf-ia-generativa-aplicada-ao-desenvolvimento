@@ -1,13 +1,6 @@
 import type { UIMessage } from "@tanstack/ai-react";
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
 import {
-  Attachment,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/attachment";
-import {
   Avatar,
   AvatarFallback,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/avatar";
@@ -44,7 +37,6 @@ import {
   Message,
   MessageAvatar,
   MessageContent,
-  MessageFooter,
   MessageHeader,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/message";
 import {
@@ -72,7 +64,6 @@ import {
 import {
   BotIcon,
   CopyIcon,
-  FileSearchIcon,
   InfoIcon,
   KeyRoundIcon,
   MenuIcon,
@@ -201,15 +192,16 @@ function PerguntaRapidaButton({
 }
 
 /**
- * Padrão oficial shadcn Message:
- * MessageAvatar > Avatar (size default = 32px) > AvatarFallback com iniciais.
- * Não usar size="sm" (desalinha o slot min-w-8) nem ícones no Fallback.
+ * Avatar no topo da mensagem (self-start). O default do MessageAvatar é
+ * self-end + -translate-y-8 com footer — fica estranho com anexos MCP altos.
  */
-function AvatarDaMensagem({ iniciais }: { iniciais: string }) {
+function AvatarDaMensagem({ isUser }: { isUser: boolean }) {
   return (
-    <MessageAvatar>
-      <Avatar>
-        <AvatarFallback>{iniciais}</AvatarFallback>
+    <MessageAvatar className="self-start group-has-data-[slot=message-footer]/message:translate-y-0">
+      <Avatar aria-label={isUser ? "Você" : "Copiloto Northa"}>
+        <AvatarFallback className="[&>svg]:size-4">
+          {isUser ? "EU" : <BotIcon />}
+        </AvatarFallback>
       </Avatar>
     </MessageAvatar>
   );
@@ -566,12 +558,12 @@ function MensagemAiItem({
 
   return (
     <MessageScrollerItem
-      className="[content-visibility:visible]"
+      className="[contain-intrinsic-size:none] [content-visibility:visible]"
       messageId={mensagem.id}
       scrollAnchor={isUser}
     >
       <Message align={isUser ? "end" : "start"}>
-        <AvatarDaMensagem iniciais={isUser ? "EU" : "CN"} />
+        <AvatarDaMensagem isUser={isUser} />
         <MessageContent>
           <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
 
@@ -596,7 +588,7 @@ function MensagemAiItem({
           ) : null}
 
           {podeMostrarResposta && !isUser ? (
-            <MessageFooter className="min-h-8">
+            <div className="flex items-center px-1">
               <Button
                 aria-label="Copiar resposta"
                 onClick={handleCopiar}
@@ -606,33 +598,8 @@ function MensagemAiItem({
               >
                 <CopyIcon />
               </Button>
-            </MessageFooter>
+            </div>
           ) : null}
-        </MessageContent>
-      </Message>
-    </MessageScrollerItem>
-  );
-}
-
-/** Placeholder enquanto a mensagem do assistente ainda não chegou. */
-function IndicadorPensando() {
-  return (
-    <MessageScrollerItem className="[content-visibility:visible]">
-      <Message align="start">
-        <AvatarDaMensagem iniciais="CN" />
-        <MessageContent>
-          <MessageHeader>Copiloto</MessageHeader>
-          <Attachment className="w-full max-w-md" size="sm" state="processing">
-            <AttachmentMedia>
-              <FileSearchIcon />
-            </AttachmentMedia>
-            <AttachmentContent>
-              <AttachmentTitle>Pensando…</AttachmentTitle>
-              <AttachmentDescription>
-                Preparando consulta à base Northa
-              </AttachmentDescription>
-            </AttachmentContent>
-          </Attachment>
         </MessageContent>
       </Message>
     </MessageScrollerItem>
@@ -754,8 +721,6 @@ export function CopilotoNortha() {
   const consultandoBase = iaAtiva && estaConsultandoBase(ultimaAi);
   const temMensagens = aiMessages.length > 0;
   const mostrarEmpty = !digitando && aiMessages.length === 0;
-  // Evita item extra com scrollAnchor: só um shimmer leve até o assistant existir.
-  const mostrarPensando = digitando && (!ultimaAi || ultimaAi.role === "user");
 
   return (
     <div className="relative flex h-svh overflow-hidden bg-background">
@@ -857,8 +822,6 @@ export function CopilotoNortha() {
                     mensagem={mensagem}
                   />
                 ))}
-
-                {mostrarPensando ? <IndicadorPensando /> : null}
 
                 {error && iaAtiva ? (
                   <MessageScrollerItem>

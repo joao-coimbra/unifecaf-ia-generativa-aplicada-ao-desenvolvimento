@@ -13,9 +13,9 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { documentos as baseDocumentos } from "../lib/knowledge-base";
 import { DialogDocumento, type DocumentoVisualizado } from "./dialog-documento";
 
-const INTERVALO_LEITURA_MS = 650;
-const PAUSA_APOS_ULTIMO_MS = 380;
-const ATRASO_PRIMEIRA_LEITURA_MS = 280;
+/** Intervalo só troca estado (processing→done), sem montar/desmontar — evita jank no scroller. */
+const INTERVALO_ESTADO_MS = 420;
+const PAUSA_APOS_ULTIMO_MS = 220;
 
 export type DocumentoLido = DocumentoVisualizado;
 
@@ -106,8 +106,8 @@ function AnexoDocumentoMcp({
 }
 
 /**
- * Fluxo de chatbot: Pensando → lendo anexos MCP (Attachment + shimmer) → pronto.
- * O shimmer oficial do shadcn fica em `AttachmentTitle` com `state="processing"`.
+ * Fluxo: Pensando → lista estável de anexos MCP (só muda state) → pronto.
+ * Todos os docs montam de uma vez para não alterar a altura a cada tick.
  */
 export function AtividadeMcp({
   animar,
@@ -122,9 +122,6 @@ export function AtividadeMcp({
 }) {
   const chave = chaveDocumentos(documentos);
   const totalDocumentos = documentos.length;
-  const [visiveis, setVisiveis] = useState(() =>
-    animar ? 0 : documentos.length
-  );
   const [indiceLendo, setIndiceLendo] = useState(-1);
   const [documentoAberto, setDocumentoAberto] = useState<DocumentoLido | null>(
     null
@@ -148,51 +145,46 @@ export function AtividadeMcp({
     const totalParaChave = chave === "" ? 0 : totalDocumentos;
 
     if (!animar) {
-      setVisiveis(totalParaChave);
       setIndiceLendo(-1);
       notificarLeitura(true);
       return;
     }
 
     if (totalParaChave === 0) {
-      setVisiveis(0);
       setIndiceLendo(-1);
       notificarLeitura(false);
       return;
     }
 
-    setVisiveis(0);
-    setIndiceLendo(-1);
+    setIndiceLendo(0);
     notificarLeitura(false);
 
     let cancelado = false;
     let indice = 0;
     let timer: ReturnType<typeof setTimeout>;
 
-    const revelarProximo = () => {
+    const avancar = () => {
       if (cancelado) {
         return;
       }
 
-      setIndiceLendo(indice);
-      setVisiveis(indice + 1);
       indice += 1;
 
       if (indice < totalParaChave) {
-        timer = setTimeout(revelarProximo, INTERVALO_LEITURA_MS);
+        setIndiceLendo(indice);
+        timer = setTimeout(avancar, INTERVALO_ESTADO_MS);
         return;
       }
 
+      setIndiceLendo(-1);
       timer = setTimeout(() => {
-        if (cancelado) {
-          return;
+        if (!cancelado) {
+          notificarLeitura(true);
         }
-        setIndiceLendo(-1);
-        notificarLeitura(true);
       }, PAUSA_APOS_ULTIMO_MS);
     };
 
-    timer = setTimeout(revelarProximo, ATRASO_PRIMEIRA_LEITURA_MS);
+    timer = setTimeout(avancar, INTERVALO_ESTADO_MS);
 
     return () => {
       cancelado = true;
@@ -201,7 +193,6 @@ export function AtividadeMcp({
   }, [animar, chave, totalDocumentos]);
 
   const mostrandoBusca = animar && documentos.length === 0;
-  const docsVisiveis = documentos.slice(0, visiveis);
 
   return (
     <>
@@ -224,14 +215,39 @@ export function AtividadeMcp({
           </Attachment>
         ) : null}
 
-        {docsVisiveis.map((doc, index) => (
-          <AnexoDocumentoMcp
-            documento={doc}
-            key={doc.codigo}
-            lendo={animar && index === indiceLendo}
-            onAbrir={handleAbrirDocumento}
-          />
-        ))}
+        {documentos.map((doc, index) => {
+          const aindaNaoLeu =
+            animar && indiceLendo !== -1 && index > indiceLendo;
+          const lendo = animar && index === indiceLendo;
+
+          if (aindaNaoLeu) {
+            return (
+              <Attachment
+                className="w-full opacity-50"
+                key={doc.codigo}
+                size="sm"
+                state="idle"
+              >
+                <AttachmentMedia>
+                  <FileTextIcon />
+                </AttachmentMedia>
+                <AttachmentContent>
+                  <AttachmentTitle>{doc.codigo}.md</AttachmentTitle>
+                  <AttachmentDescription>Na fila…</AttachmentDescription>
+                </AttachmentContent>
+              </Attachment>
+            );
+          }
+
+          return (
+            <AnexoDocumentoMcp
+              documento={doc}
+              key={doc.codigo}
+              lendo={lendo}
+              onAbrir={handleAbrirDocumento}
+            />
+          );
+        })}
       </div>
 
       <DialogDocumento
