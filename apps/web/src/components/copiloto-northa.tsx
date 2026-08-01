@@ -34,10 +34,16 @@ import {
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/input-group";
 import { Label } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/label";
 import {
+  Marker,
+  MarkerContent,
+  MarkerIcon,
+} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/marker";
+import {
   Message,
   MessageAvatar,
   MessageContent,
   MessageFooter,
+  MessageHeader,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/message";
 import {
   MessageScroller,
@@ -48,6 +54,7 @@ import {
   MessageScrollerViewport,
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/message-scroller";
 import { ScrollArea } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/scroll-area";
+import { Separator } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/separator";
 import {
   Sheet,
   SheetContent,
@@ -57,7 +64,12 @@ import {
 } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/sheet";
 import { Spinner } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/spinner";
 import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/toggle-group";
+import {
   BotIcon,
+  CopyIcon,
   InfoIcon,
   KeyRoundIcon,
   MenuIcon,
@@ -77,6 +89,7 @@ import { toast } from "sonner";
 
 import {
   type AiProvider,
+  isAiProvider,
   placeholderChave,
   rotuloConsoleProvedor,
   rotuloProvedor,
@@ -93,6 +106,7 @@ import {
   setStoredConfig,
 } from "../lib/api-key";
 import { type Categoria, categorias } from "../lib/knowledge-base";
+import { ThemeToggle } from "./theme-toggle";
 
 interface FonteCitada {
   codigo: string;
@@ -189,6 +203,30 @@ function estaConsultandoBase(message: UIMessage | undefined): boolean {
   );
 }
 
+function deveMostrarConsultando({
+  consultandoBase,
+  digitando,
+  isUltima,
+  isUser,
+  mensagem,
+  texto,
+}: {
+  consultandoBase: boolean;
+  digitando: boolean;
+  isUltima: boolean;
+  isUser: boolean;
+  mensagem: UIMessage;
+  texto: string;
+}): boolean {
+  if (isUser || texto) {
+    return false;
+  }
+
+  const consultando = digitando && isUltima && estaConsultandoBase(mensagem);
+
+  return consultando || (consultandoBase && isUltima);
+}
+
 function PerguntaRapidaButton({
   disabled,
   pergunta,
@@ -215,29 +253,14 @@ function PerguntaRapidaButton({
   );
 }
 
-function ProvedorOptionButton({
-  ativo,
-  label,
-  provider,
-  onSelect,
-}: {
-  ativo: boolean;
-  label: string;
-  provider: AiProvider;
-  onSelect: (provider: AiProvider) => void;
-}) {
-  const handleClick = useEffectEvent(() => {
-    onSelect(provider);
-  });
-
+function IndicadorConsultandoBase() {
   return (
-    <Button
-      onClick={handleClick}
-      type="button"
-      variant={ativo ? "default" : "outline"}
-    >
-      {label}
-    </Button>
+    <Marker role="status">
+      <MarkerIcon>
+        <Spinner />
+      </MarkerIcon>
+      <MarkerContent className="shimmer">Consultando a base…</MarkerContent>
+    </Marker>
   );
 }
 
@@ -294,9 +317,12 @@ function ApiKeyDialog({
     }
   );
 
-  const handleProvedorChange = useEffectEvent((proximo: AiProvider) => {
-    setProvedor(proximo);
-    setMensagem(null);
+  const handleProvedorChange = useEffectEvent((values: string[]) => {
+    const [proximo] = values;
+    if (isAiProvider(proximo)) {
+      setProvedor(proximo);
+      setMensagem(null);
+    }
   });
 
   return (
@@ -314,20 +340,20 @@ function ApiKeyDialog({
         <form className="flex flex-col gap-3" onSubmit={handleSalvar}>
           <div className="flex flex-col gap-2">
             <Label>Provedor</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <ProvedorOptionButton
-                ativo={provedor === "anthropic"}
-                label="Claude"
-                onSelect={handleProvedorChange}
-                provider="anthropic"
-              />
-              <ProvedorOptionButton
-                ativo={provedor === "gemini"}
-                label="Gemini"
-                onSelect={handleProvedorChange}
-                provider="gemini"
-              />
-            </div>
+            <ToggleGroup
+              className="grid w-full grid-cols-2"
+              onValueChange={handleProvedorChange}
+              spacing={0}
+              value={[provedor]}
+              variant="outline"
+            >
+              <ToggleGroupItem className="w-full" value="anthropic">
+                Claude
+              </ToggleGroupItem>
+              <ToggleGroupItem className="w-full" value="gemini">
+                Gemini
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -408,6 +434,8 @@ function SidebarContent({
         </Badge>
       </div>
 
+      <Separator />
+
       <div className="flex flex-col gap-2">
         <p className="font-medium text-muted-foreground text-xs">Categorias</p>
         <div className="flex flex-wrap gap-2">
@@ -418,6 +446,8 @@ function SidebarContent({
           ))}
         </div>
       </div>
+
+      <Separator />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2">
         <p className="font-medium text-muted-foreground text-xs">
@@ -436,6 +466,8 @@ function SidebarContent({
           </div>
         </ScrollArea>
       </div>
+
+      <Separator />
 
       <div className="flex flex-col gap-1">
         <Button
@@ -492,15 +524,6 @@ function ConteudoMensagem({ content }: { content: string }) {
   );
 }
 
-function IndicadorFerramenta({ nome }: { nome: string }) {
-  return (
-    <div className="flex items-center gap-2 text-muted-foreground text-sm">
-      <Spinner />
-      <span className="animate-pulse">Consultando {nome}...</span>
-    </div>
-  );
-}
-
 function EmptyState({
   iaAtiva,
   onConfigurarChave,
@@ -547,48 +570,6 @@ function EmptyState({
   );
 }
 
-function ConteudoBolhaAi({
-  consultando,
-  consultandoBase,
-  isUltima,
-  texto,
-}: {
-  consultando: boolean;
-  consultandoBase: boolean;
-  isUltima: boolean;
-  texto: string;
-}) {
-  if (consultando && !texto) {
-    return <IndicadorFerramenta nome="buscar_documento_northa" />;
-  }
-
-  if (texto) {
-    return <ConteudoMensagem content={texto} />;
-  }
-
-  if (consultandoBase && isUltima) {
-    return <IndicadorFerramenta nome="buscar_documento_northa" />;
-  }
-
-  return <span className="text-muted-foreground text-sm">…</span>;
-}
-
-function FontesBadges({ fontes }: { fontes: FonteCitada[] }) {
-  if (fontes.length === 0) {
-    return null;
-  }
-
-  return (
-    <MessageFooter className="flex flex-wrap gap-1.5">
-      {fontes.map((fonte) => (
-        <Badge key={fonte.codigo} variant="outline">
-          {fonte.codigo} · {fonte.titulo}
-        </Badge>
-      ))}
-    </MessageFooter>
-  );
-}
-
 function MensagemAiItem({
   consultandoBase,
   digitando,
@@ -603,10 +584,28 @@ function MensagemAiItem({
   const isUser = mensagem.role === "user";
   const texto = textoDaMensagem(mensagem);
   const fontes = fontesDaMensagem(mensagem);
-  const consultando = digitando && isUltima && estaConsultandoBase(mensagem);
+  const mostrarConsultando = deveMostrarConsultando({
+    consultandoBase,
+    digitando,
+    isUltima,
+    isUser,
+    mensagem,
+    texto,
+  });
+
+  const handleCopiar = useEffectEvent(async () => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success("Resposta copiada.");
+    } catch {
+      toast.error("Não foi possível copiar a resposta.");
+    }
+  });
+
+  const mostrarRodape = fontes.length > 0 || (!isUser && Boolean(texto));
 
   return (
-    <MessageScrollerItem key={mensagem.id} scrollAnchor={isUltima || digitando}>
+    <MessageScrollerItem messageId={mensagem.id} scrollAnchor={isUser}>
       <Message align={isUser ? "end" : "start"}>
         <MessageAvatar>
           <Avatar size="sm">
@@ -616,20 +615,45 @@ function MensagemAiItem({
           </Avatar>
         </MessageAvatar>
         <MessageContent>
-          <Bubble
-            align={isUser ? "end" : "start"}
-            variant={isUser ? "default" : "secondary"}
-          >
-            <BubbleContent>
-              <ConteudoBolhaAi
-                consultando={consultando}
-                consultandoBase={consultandoBase}
-                isUltima={isUltima}
-                texto={texto}
-              />
-            </BubbleContent>
-          </Bubble>
-          <FontesBadges fontes={fontes} />
+          <MessageHeader>{isUser ? "Você" : "Copiloto"}</MessageHeader>
+
+          {mostrarConsultando ? <IndicadorConsultandoBase /> : null}
+
+          {!mostrarConsultando && texto ? (
+            <Bubble
+              align={isUser ? "end" : "start"}
+              variant={isUser ? "default" : "tinted"}
+            >
+              <BubbleContent>
+                <ConteudoMensagem content={texto} />
+              </BubbleContent>
+            </Bubble>
+          ) : null}
+
+          {mostrarConsultando || texto || isUser ? null : (
+            <span className="px-3 text-muted-foreground text-sm">…</span>
+          )}
+
+          {mostrarRodape ? (
+            <MessageFooter className="flex flex-wrap items-center gap-1.5">
+              {fontes.map((fonte) => (
+                <Badge key={fonte.codigo} variant="outline">
+                  {fonte.codigo} · {fonte.titulo}
+                </Badge>
+              ))}
+              {!isUser && texto ? (
+                <Button
+                  aria-label="Copiar resposta"
+                  onClick={handleCopiar}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <CopyIcon />
+                </Button>
+              ) : null}
+            </MessageFooter>
+          ) : null}
         </MessageContent>
       </Message>
     </MessageScrollerItem>
@@ -648,14 +672,13 @@ function IndicadorDigitando() {
           </Avatar>
         </MessageAvatar>
         <MessageContent>
-          <Bubble align="start" variant="secondary">
-            <BubbleContent>
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Spinner />
-                <span className="animate-pulse">conectando à IA...</span>
-              </div>
-            </BubbleContent>
-          </Bubble>
+          <MessageHeader>Copiloto</MessageHeader>
+          <Marker role="status">
+            <MarkerIcon>
+              <Spinner />
+            </MarkerIcon>
+            <MarkerContent className="shimmer">Conectando à IA…</MarkerContent>
+          </Marker>
         </MessageContent>
       </Message>
     </MessageScrollerItem>
@@ -805,14 +828,14 @@ export function CopilotoNortha() {
   });
 
   return (
-    <div className="flex h-svh overflow-hidden bg-[radial-gradient(ellipse_at_top,_#e8eef7_0%,_#f5f7fa_45%,_#eef1f5_100%)]">
+    <div className="flex h-svh overflow-hidden bg-[radial-gradient(ellipse_at_top,oklch(from_var(--primary)_0.97_calc(c*0.15)_h)_0%,transparent_55%)] bg-background">
       <ApiKeyDialog
         onOpenChange={setDialogChaveAberto}
         onSaved={sincronizarFonteChave}
         open={dialogChaveAberto}
       />
 
-      <aside className="hidden w-80 shrink-0 border-border/80 border-r bg-sidebar/90 p-4 backdrop-blur md:flex md:flex-col">
+      <aside className="hidden w-80 shrink-0 border-border/80 border-r bg-sidebar p-4 md:flex md:flex-col">
         <SidebarContent
           fonteChave={fonteChave}
           onConfigurarChave={abrirConfiguracaoChave}
@@ -869,18 +892,21 @@ export function CopilotoNortha() {
             <Badge variant={iaAtiva ? "default" : "outline"}>
               {rotuloBadge(fonteChave, provedor)}
             </Badge>
+            <ThemeToggle />
           </div>
         </header>
 
-        <MessageScrollerProvider>
+        <MessageScrollerProvider autoScroll defaultScrollPosition="end">
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-6">
+              <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-6 px-4 py-6">
                 {mostrarEmpty ? (
-                  <EmptyState
-                    iaAtiva={iaAtiva}
-                    onConfigurarChave={abrirConfiguracaoChave}
-                  />
+                  <MessageScrollerItem>
+                    <EmptyState
+                      iaAtiva={iaAtiva}
+                      onConfigurarChave={abrirConfiguracaoChave}
+                    />
+                  </MessageScrollerItem>
                 ) : null}
 
                 {aiMessages.map((mensagem, index) => (
@@ -896,9 +922,11 @@ export function CopilotoNortha() {
                 {mostrarDigitando ? <IndicadorDigitando /> : null}
 
                 {error && iaAtiva ? (
-                  <p className="text-destructive text-sm">
-                    Erro na IA: {error.message}
-                  </p>
+                  <MessageScrollerItem>
+                    <p className="text-destructive text-sm" role="alert">
+                      Erro na IA: {error.message}
+                    </p>
+                  </MessageScrollerItem>
                 ) : null}
               </MessageScrollerContent>
             </MessageScrollerViewport>

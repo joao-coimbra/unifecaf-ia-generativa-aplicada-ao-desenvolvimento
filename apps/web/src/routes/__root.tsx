@@ -6,7 +6,9 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Toaster } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/sonner";
+import { TooltipProvider } from "@unifecaf-ia-generativa-aplicada-ao-desenvolvimento/ui/components/tooltip";
 
+import { ThemeProvider } from "../components/theme-provider";
 import appCss from "../index.css?url";
 
 export type RouterAppContext = Record<string, never>;
@@ -42,14 +44,18 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootDocument() {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body className="min-h-svh bg-background text-foreground antialiased">
-        <Outlet />
-        <Toaster richColors />
-        <TanStackRouterDevtools position="bottom-left" />
+        <ThemeProvider>
+          <TooltipProvider>
+            <Outlet />
+            <Toaster richColors />
+            <TanStackRouterDevtools position="bottom-left" />
+          </TooltipProvider>
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>
